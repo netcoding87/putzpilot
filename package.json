@@ -1,0 +1,28 @@
+{
+  "name": "putzpilot",
+  "private": true,
+  "packageManager": "pnpm@9.12.2",
+  "scripts": {
+    "dev": "concurrently -k \"pnpm -C apps/renderer dev\" \"pnpm -C apps/main dev\"",
+    "build": "pnpm -r build",
+    "dist": "pnpm -C apps/renderer build && pnpm -C apps/main build && pnpm -C apps/main exec electron-builder",
+    "dist:dir": "pnpm -C apps/renderer build && pnpm -C apps/main build && pnpm -C apps/main exec electron-builder --dir",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "format": "prettier -w ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/node": "^22.12.0",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "prettier": "^3.2.5",
+    "typescript-eslint": "^8.54.0",
+    "typescript": "^5.9.3"
+  }
+}
