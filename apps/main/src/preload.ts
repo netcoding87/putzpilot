@@ -1,5 +1,1 @@
-import { contextBridge } from 'electron';
-
-contextBridge.exposeInMainWorld('putzpilot', {
-  version: '0.0.0',
-});
+// Deprecated: preload now lives in src/preload.cjs for CommonJS compatibility.

@@ -8,7 +8,7 @@
   "main": "dist/main.js",
   "scripts": {
     "dev": "concurrently -k \"tsc -w -p tsconfig.json\" \"VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node -e \"const fs=require('fs');const path=require('path');fs.copyFileSync(path.join('src','preload.cjs'),path.join('dist','preload.cjs'));\"",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
