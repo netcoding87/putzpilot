@@ -2,6 +2,7 @@ import type { Person, StatusGroup } from '../types/people';
 
 type PersonsSectionProps = {
   persons: Person[];
+  statuses: { id?: number | string; name?: string }[];
   selectedIds: Set<string>;
   loading: boolean;
   error: string | null;
@@ -22,6 +23,7 @@ type PersonsSectionProps = {
 
 export default function PersonsSection({
   persons,
+  statuses,
   selectedIds,
   loading,
   error,
@@ -92,6 +94,10 @@ export default function PersonsSection({
               placeholder="Name, E‑Mail oder Status"
             />
           </label>
+          <details className="status-debug">
+            <summary>Status-Endpoint (JSON)</summary>
+            <pre>{JSON.stringify(statuses, null, 2)}</pre>
+          </details>
           {currentActiveGroup === 'Alle' ? (
             <ul className="list">
               {visiblePersons.map((person, index) => {

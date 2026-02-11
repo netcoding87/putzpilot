@@ -13,6 +13,7 @@ describe('PersonsSection', () => {
     render(
       <PersonsSection
         persons={[]}
+        statuses={[]}
         selectedIds={new Set()}
         loading={false}
         error={null}
@@ -28,7 +29,6 @@ describe('PersonsSection', () => {
         getPersonKey={(value) => String(value.id ?? '0')}
         getStatus={() => 'status.member'}
         getAgeValue={() => 30}
-        formatRels={() => 'Rels: —'}
         onSetActiveGroup={vi.fn()}
       />,
     );
@@ -41,6 +41,7 @@ describe('PersonsSection', () => {
     render(
       <PersonsSection
         persons={[person]}
+        statuses={[]}
         selectedIds={new Set(['1'])}
         loading={false}
         error={null}
@@ -56,7 +57,6 @@ describe('PersonsSection', () => {
         getPersonKey={(value) => String(value.id ?? '0')}
         getStatus={() => 'status.member'}
         getAgeValue={() => 30}
-        formatRels={() => 'Rels: —'}
         onSetActiveGroup={vi.fn()}
       />,
     );

@@ -131,37 +131,6 @@ export default function App() {
   const getPersonKey = (person: Person, fallback: number) =>
     String(person.id ?? person.guid ?? fallback);
 
-  const formatRels = (person: Person) => {
-    if (!person.rels || person.rels.length === 0) return 'Rels: —';
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return `Rels: ${person.rels
-      .map((rel: any) => {
-        const from =
-          rel.personAId ??
-          rel.personBId ??
-          rel.vater_id ??
-          rel.parentId ??
-          rel.fromId ??
-          rel.from_id ??
-          rel.personId ??
-          rel.person_id ??
-          '?';
-        const to =
-          rel.personBId ??
-          rel.personAId ??
-          rel.kind_id ??
-          rel.childId ??
-          rel.toId ??
-          rel.to_id ??
-          rel.relatedPersonId ??
-          rel.related_person_id ??
-          '?';
-        const label = rel.relationshipName ?? rel.name ?? rel.id ?? '';
-        return `${from}→${to}${label ? ` (${label})` : ''}`;
-      })
-      .join(', ')}`;
-  };
-
   const householdMap = useMemo(() => {
     const parent = new Map<string, string>();
 
@@ -449,6 +418,7 @@ export default function App() {
           />
           <PersonsSection
             persons={persons}
+            statuses={statuses}
             selectedIds={selectedIds}
             loading={loading}
             error={error}
@@ -464,7 +434,6 @@ export default function App() {
             getPersonKey={getPersonKey}
             getStatus={getStatus}
             getAgeValue={getAgeValue}
-            formatRels={formatRels}
             onSetActiveGroup={setActiveGroup}
           />
         </div>
