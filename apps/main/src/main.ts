@@ -2,6 +2,28 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Store from 'electron-store';
+import crypto from 'node:crypto';
+
+// Encryption key (in production, should be derived from OS Keychain or similar)
+const ENCRYPTION_KEY = crypto.scryptSync('putzpilot-app-secret', 'salt', 32);
+const IV_LENGTH = 16;
+
+const encryptPassword = (password: string): string => {
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  let encrypted = cipher.update(password, 'utf-8', 'hex');
+  encrypted += cipher.final('hex');
+  return iv.toString('hex') + ':' + encrypted;
+};
+
+const decryptPassword = (encryptedPassword: string): string => {
+  const parts = encryptedPassword.split(':');
+  const iv = Buffer.from(parts[0], 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  let decrypted = decipher.update(parts[1], 'hex', 'utf-8');
+  decrypted += decipher.final('utf-8');
+  return decrypted;
+};
 
 const createWindow = () => {
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
@@ -42,7 +64,14 @@ type ChurchToolsCredentials = {
 };
 
 let sessionCookies: string | null = null;
-const store = new Store<{ selection: string[] }>({
+const store = new Store<{
+  selection: string[];
+  settings?: {
+    baseUrl: string;
+    username: string;
+    password: string; // encrypted
+  };
+}>({
   defaults: {
     selection: [],
   },
@@ -269,6 +298,29 @@ ipcMain.handle('selection:get', () => {
 
 ipcMain.handle('selection:set', (_event, selection: string[]) => {
   store.set('selection', selection);
+  return { success: true };
+});
+
+ipcMain.handle('settings:get', () => {
+  const stored = store.get('settings');
+  if (!stored) {
+    return null;
+  }
+  // Decrypt password on retrieval
+  return {
+    baseUrl: stored.baseUrl,
+    username: stored.username,
+    password: stored.password ? decryptPassword(stored.password) : '',
+  };
+});
+
+ipcMain.handle('settings:set', (_event, settings: { baseUrl: string; username: string; password: string }) => {
+  const normalizedUrl = normalizeBaseUrl(settings.baseUrl);
+  store.set('settings', {
+    baseUrl: normalizedUrl,
+    username: settings.username,
+    password: settings.password ? encryptPassword(settings.password) : '',
+  });
   return { success: true };
 });
 

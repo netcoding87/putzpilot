@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 
 type Person = {
   id?: number | string;
@@ -43,6 +43,22 @@ type StatusGroup = {
 
 
 export default function App() {
+  const [currentPage, setCurrentPage] = useState<'main' | 'settings'>('main');
+  const [baseUrl, setBaseUrl] = useState('https://cgpb.church.tools');
+  const [username, setUsername] = useState('nick.wittland@gmx.de');
+  const [password, setPassword] = useState('');
+  
+  // Settings page state
+  const [settingsDraft, setSettingsDraft] = useState({
+    baseUrl: 'https://cgpb.church.tools',
+    username: '',
+    password: '',
+  });
+  const [settingsDirty, setSettingsDirty] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsTestResult, setSettingsTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const settingsTestResultRef = useRef<{ ok: boolean; msg: string } | null>(null);
+
   const getDefaultStartDate = () => {
     const now = new Date();
     const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -85,9 +101,6 @@ export default function App() {
     }
     return age;
   };
-  const [baseUrl, setBaseUrl] = useState('https://cgpb.church.tools');
-  const [username, setUsername] = useState('nick.wittland@gmx.de');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [persons, setPersons] = useState<Person[]>([]);
@@ -96,6 +109,37 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [startDate, setStartDate] = useState(formatDateInput(getDefaultStartDate()));
+
+  // Load settings from electron-store on mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const stored = await window.putzpilot.settings.get();
+        if (stored) {
+          setBaseUrl(stored.baseUrl);
+          setUsername(stored.username);
+          setPassword(stored.password);
+          setSettingsDraft({
+            baseUrl: stored.baseUrl,
+            username: stored.username,
+            password: stored.password,
+          });
+        } else {
+          // Set initial values in draft
+          setSettingsDraft({
+            baseUrl,
+            username,
+            password,
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load settings:', err);
+      }
+    };
+    loadSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const defaultEnd = useMemo(() => {
     const start = getDefaultStartDate();
     const target = addMonths(start, 3);
@@ -130,8 +174,9 @@ export default function App() {
 
   const formatRels = (person: Person) => {
     if (!person.rels || person.rels.length === 0) return 'Rels: —';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return `Rels: ${person.rels
-      .map((rel) => {
+      .map((rel: any) => {
         const from =
           rel.personAId ??
           rel.personBId ??
@@ -188,8 +233,9 @@ export default function App() {
       ensure(person.id ?? null);
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     persons.forEach((person) => {
-      (person.rels ?? []).forEach((rel) => {
+      (person.rels ?? []).forEach((rel: any) => {
         const parentId = ensure(
           rel.personAId ??
             rel.vater_id ??
@@ -342,6 +388,7 @@ export default function App() {
       uf.find(personId);
 
       if (Array.isArray(person.rels)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         person.rels.forEach((rel: any) => {
           const relatedId = rel.personBId ?? rel.relativeId;
           if (relatedId && selectedIdSet.has(relatedId)) {
@@ -422,7 +469,6 @@ export default function App() {
           }
 
           // Add all persons from this group, respecting household constraint
-          let countAdded = 0;
           for (const person of group.members) {
             if (selected.length >= 10) break;
             const householdKey = getHouseholdKey(person);
@@ -430,7 +476,6 @@ export default function App() {
               usedHouseholds.add(householdKey);
             }
             selected.push(person);
-            countAdded += 1;
           }
 
           attempts -= 1;
@@ -451,11 +496,14 @@ export default function App() {
     setPlan(assignments);
   };
 
-  const handleLogin = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleLoadPersons = async () => {
+    if (!baseUrl || !username || !password) {
+      setError('Bitte zuerst die ChurchTools-Verbindung in den Einstellungen speichern.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
-    setPersons([]);
 
     try {
       await window.putzpilot.churchtools.login({ baseUrl, username, password });
@@ -493,7 +541,7 @@ export default function App() {
               if (person.status?.name) return person.status.name;
               if (person.statusId) {
                 const statusEntry = nextStatuses.find(
-                  (entry) => `${entry.id}` === `${person.statusId}`,
+                  (entry: PersonStatus) => `${entry.id}` === `${person.statusId}`,
                 );
                 return statusEntry?.name ?? `Status ${person.statusId}`;
               }
@@ -525,51 +573,154 @@ export default function App() {
     window.putzpilot.selection.set(Array.from(next));
   };
 
-  return (
+  // Settings handlers
+  const handleSettingsChange = (field: 'baseUrl' | 'username' | 'password', value: string) => {
+    setSettingsDraft((prev) => ({ ...prev, [field]: value }));
+    setSettingsDirty(true);
+    setSettingsTestResult(null);
+  };
+
+  const handleTestConnection = async () => {
+    setSettingsLoading(true);
+    setSettingsTestResult(null);
+    try {
+      await window.putzpilot.churchtools.login({
+        baseUrl: settingsDraft.baseUrl,
+        username: settingsDraft.username,
+        password: settingsDraft.password,
+      });
+      setSettingsTestResult({
+        ok: true,
+        msg: 'Verbindung erfolgreich getestet!',
+      });
+      settingsTestResultRef.current = { ok: true, msg: 'Verbindung erfolgreich getestet!' };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Verbindung fehlgeschlagen';
+      setSettingsTestResult({ ok: false, msg });
+      settingsTestResultRef.current = { ok: false, msg };
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    try {
+      await window.putzpilot.settings.set({
+        baseUrl: settingsDraft.baseUrl,
+        username: settingsDraft.username,
+        password: settingsDraft.password,
+      });
+      // Update main form fields
+      setBaseUrl(settingsDraft.baseUrl);
+      setUsername(settingsDraft.username);
+      setPassword(settingsDraft.password);
+      setSettingsDirty(false);
+      setSettingsTestResult({
+        ok: true,
+        msg: 'Einstellungen gespeichert!',
+      });
+      // Clear message after 3 seconds
+      setTimeout(() => setSettingsTestResult(null), 3000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Fehler beim Speichern';
+      setSettingsTestResult({ ok: false, msg });
+    }
+  };
+
+  // Settings Page Component
+  const SettingsPage = () => (
     <div className="app">
       <header className="app__header">
         <h1>PutzPilot</h1>
-        <p>ChurchTools‑Login und erster Personen‑Sync.</p>
+        <p>ChurchTools‑Verbindungs‑Einstellungen</p>
       </header>
 
       <section className="card">
-        <h2>ChurchTools Login</h2>
-        <form className="form" onSubmit={handleLogin}>
+        <button
+          type="button"
+          onClick={() => setCurrentPage('main')}
+          className="btn-back"
+        >
+          ← Zurück
+        </button>
+        <h2>ChurchTools‑Einstellungen</h2>
+        <form className="form">
           <label>
             Base‑URL
             <input
               type="url"
-              value={baseUrl}
-              onChange={(event) => setBaseUrl(event.target.value)}
+              value={settingsDraft.baseUrl}
+              onChange={(e) => handleSettingsChange('baseUrl', e.target.value)}
               placeholder="https://deine-gemeinde.church.tools"
-              required
             />
           </label>
           <label>
             Benutzername
             <input
               type="text"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              required
+              value={settingsDraft.username}
+              onChange={(e) => handleSettingsChange('username', e.target.value)}
+              placeholder="dein.benutzername"
             />
           </label>
           <label>
             Passwort
             <input
               type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
+              value={settingsDraft.password}
+              onChange={(e) => handleSettingsChange('password', e.target.value)}
+              placeholder="••••••••"
             />
           </label>
-          <button type="submit" disabled={loading}>
-            {loading ? 'Verbinden…' : 'Login & Personen laden'}
-          </button>
-        </form>
 
-        {error && <p className="error">{error}</p>}
+          {settingsTestResult && (
+            <div className={`test-result ${settingsTestResult.ok ? 'ok' : 'error'}`}>
+              {settingsTestResult.msg}
+            </div>
+          )}
+
+          <div className="form__buttons">
+            <button
+              type="button"
+              onClick={handleTestConnection}
+              disabled={settingsLoading || !settingsDraft.baseUrl || !settingsDraft.username || !settingsDraft.password}
+            >
+              {settingsLoading ? 'Wird getestet...' : 'Verbindung testen'}
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveSettings}
+              disabled={!settingsDirty}
+              className="btn-primary"
+            >
+              Speichern
+            </button>
+          </div>
+        </form>
       </section>
+    </div>
+  );
+
+  return (
+    <>
+      {currentPage === 'settings' ? (
+        <SettingsPage />
+      ) : (
+        <div className="app">
+      <header className="app__header">
+        <div className="header-title">
+          <h1>PutzPilot</h1>
+          <p>Wochenplanung für den Putzdienst.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setCurrentPage('settings')}
+          className="btn-settings"
+          title="Einstellungen"
+        >
+          ⚙️
+        </button>
+      </header>
 
       <section className="card">
         <h2>Planung</h2>
@@ -590,7 +741,11 @@ export default function App() {
               onChange={(event) => setEndDate(event.target.value)}
             />
           </label>
-          <button type="button" onClick={generatePlan}>
+          <button
+            type="button"
+            onClick={generatePlan}
+            disabled={selectedPersons.length === 0}
+          >
             Plan generieren
           </button>
           <p>{selectedPersons.length} ausgewählte Mitglieder</p>
@@ -629,115 +784,135 @@ export default function App() {
       </section>
 
       <section className="card">
-        <h2>Personen ({persons.length})</h2>
-        <div className="filters">
-          {groupButtons.map((label) => (
-            <button
-              key={label}
-              type="button"
-              className={currentActiveGroup === label ? 'active' : ''}
-              onClick={() => setActiveGroup(label)}
-            >
-              {label}
-              {label === 'Alle'
-                ? ` (${visiblePersons.length})`
-                : ` (${groupCounts[label] ?? 0})`}
-            </button>
-          ))}
+        <div className="persons-header">
+          <h2>Personen ({persons.length})</h2>
+          <button
+            type="button"
+            onClick={handleLoadPersons}
+            disabled={loading}
+          >
+            {loading
+              ? 'Lade…'
+              : persons.length === 0
+                ? 'Personen laden'
+                : 'Neu laden'}
+          </button>
         </div>
-        <label className="search">
-          Suche
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Name, E‑Mail oder Status"
-          />
-        </label>
-        {persons.length === 0 ? (
-          <p>Noch keine Daten geladen.</p>
-        ) : currentActiveGroup === 'Alle' ? (
-          <ul className="list">
-            {visiblePersons.map((person, index) => {
-              const key = getPersonKey(person, index);
-              const checkboxId = `person-${key}`;
-              return (
-                <li key={key}>
-                  <div className="person-row">
-                    <input
-                      id={checkboxId}
-                      type="checkbox"
-                      checked={selectedIds.has(key)}
-                      onChange={() => toggleSelection(person, index)}
-                    />
-                    <div className="person-info">
-                      <label className="person-name" htmlFor={checkboxId}>
-                        <strong>
-                          {person.firstName} {person.lastName}
-                        </strong>
-                      </label>
-                      <span>Status: {getStatus(person)}</span>
-                      <span>
-                        Alter: {getAgeValue(person) ?? 'Unbekannt'}
-                      </span>
-                      <span>{formatRels(person)}</span>
-                      {person.email ? <span>{person.email}</span> : null}
-                      <pre className="person-debug">
-                        {JSON.stringify(person, null, 2)}
-                      </pre>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <div className="group-list">
-            {activeGroups.map((group) => (
-              <div key={group.statusKey} className="group">
-                <div className="group__header">
-                  <h3>{group.label}</h3>
-                  <span>{group.persons.length} Personen</span>
-                </div>
-                <ul className="list">
-                  {group.persons.map((person, index) => {
-                    const key = getPersonKey(person, index);
-                    const checkboxId = `person-${group.statusKey}-${key}`;
-                    return (
-                      <li key={key}>
-                        <div className="person-row">
-                          <input
-                            id={checkboxId}
-                            type="checkbox"
-                            checked={selectedIds.has(key)}
-                            onChange={() => toggleSelection(person, index)}
-                          />
-                          <div className="person-info">
-                            <label className="person-name" htmlFor={checkboxId}>
-                              <strong>
-                                {person.firstName} {person.lastName}
-                              </strong>
-                            </label>
-                            <span>Status: {getStatus(person)}</span>
-                            <span>
-                              Alter: {getAgeValue(person) ?? 'Unbekannt'}
-                            </span>
-                            <span>{formatRels(person)}</span>
-                            {person.email ? <span>{person.email}</span> : null}
-                            <pre className="person-debug">
-                              {JSON.stringify(person, null, 2)}
-                            </pre>
-                          </div>
+
+        {error && <p className="error">{error}</p>}
+
+        {persons.length === 0 ? null : (
+          <>
+            <div className="filters">
+              {groupButtons.map((label) => (
+                <button
+                  key={label}
+                  type="button"
+                  className={currentActiveGroup === label ? 'active' : ''}
+                  onClick={() => setActiveGroup(label)}
+                >
+                  {label}
+                  {label === 'Alle'
+                    ? ` (${visiblePersons.length})`
+                    : ` (${groupCounts[label] ?? 0})`}
+                </button>
+              ))}
+            </div>
+            <label className="search">
+              Suche
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Name, E‑Mail oder Status"
+              />
+            </label>
+            {currentActiveGroup === 'Alle' ? (
+              <ul className="list">
+                {visiblePersons.map((person, index) => {
+                  const key = getPersonKey(person, index);
+                  const checkboxId = `person-${key}`;
+                  return (
+                    <li key={key}>
+                      <div className="person-row">
+                        <input
+                          id={checkboxId}
+                          type="checkbox"
+                          checked={selectedIds.has(key)}
+                          onChange={() => toggleSelection(person, index)}
+                        />
+                        <div className="person-info">
+                          <label className="person-name" htmlFor={checkboxId}>
+                            <strong>
+                              {person.firstName} {person.lastName}
+                            </strong>
+                          </label>
+                          <span>Status: {getStatus(person)}</span>
+                          <span>
+                            Alter: {getAgeValue(person) ?? 'Unbekannt'}
+                          </span>
+                          <span>{formatRels(person)}</span>
+                          {person.email ? <span>{person.email}</span> : null}
+                          <pre className="person-debug">
+                            {JSON.stringify(person, null, 2)}
+                          </pre>
                         </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="group-list">
+                {activeGroups.map((group) => (
+                  <div key={group.statusKey} className="group">
+                    <div className="group__header">
+                      <h3>{group.label}</h3>
+                      <span>{group.persons.length} Personen</span>
+                    </div>
+                    <ul className="list">
+                      {group.persons.map((person, index) => {
+                        const key = getPersonKey(person, index);
+                        const checkboxId = `person-${group.statusKey}-${key}`;
+                        return (
+                          <li key={key}>
+                            <div className="person-row">
+                              <input
+                                id={checkboxId}
+                                type="checkbox"
+                                checked={selectedIds.has(key)}
+                                onChange={() => toggleSelection(person, index)}
+                              />
+                              <div className="person-info">
+                                <label className="person-name" htmlFor={checkboxId}>
+                                  <strong>
+                                    {person.firstName} {person.lastName}
+                                  </strong>
+                                </label>
+                                <span>Status: {getStatus(person)}</span>
+                                <span>
+                                  Alter: {getAgeValue(person) ?? 'Unbekannt'}
+                                </span>
+                                <span>{formatRels(person)}</span>
+                                {person.email ? <span>{person.email}</span> : null}
+                                <pre className="person-debug">
+                                  {JSON.stringify(person, null, 2)}
+                                </pre>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </section>
-    </div>
+        </div>
+      )}
+    </>
   );
 }

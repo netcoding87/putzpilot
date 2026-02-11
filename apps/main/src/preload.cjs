@@ -10,4 +10,8 @@ contextBridge.exposeInMainWorld('putzpilot', {
     get: () => ipcRenderer.invoke('selection:get'),
     set: (selection) => ipcRenderer.invoke('selection:set', selection),
   },
+  settings: {
+    get: () => ipcRenderer.invoke('settings:get'),
+    set: (settings) => ipcRenderer.invoke('settings:set', settings),
+  },
 });
