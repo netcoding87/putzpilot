@@ -30,6 +30,7 @@ Dieses Dokument ist ein lebendes Arbeits‑ und Kontextdokument für KI‑gestü
 - Online‑Pflicht: Keine Offline‑Fähigkeit.
 - Authentifizierung: Benutzername/Passwort im UI, sichere Speicherung via OS‑Keychain.
 - Plan‑Regeln: Haushalte, Fairness, Teams.
+- Testing-Stack (Renderer): Vitest + React Testing Library + user-event + MSW (Mock Service Worker).
 
 ## Datenmodell (vorläufig)
 - `members`: Personen aus ChurchTools
@@ -54,3 +55,4 @@ Dieses Dokument ist ein lebendes Arbeits‑ und Kontextdokument für KI‑gestü
 ## Änderungslog
 - 2026‑02‑08: Initiale Agents.MD erstellt.
 - 2026‑02‑09: Projekt‑Scaffold (Monorepo, Electron + React) initialisiert.
+- 2026‑02‑11: Renderer-Test-Stack mit Vitest, RTL, user-event und MSW eingeführt.
