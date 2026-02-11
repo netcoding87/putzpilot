@@ -12,6 +12,10 @@ declare global {
         }) => Promise<{ success: boolean }>;
         fetchPersons: (baseUrl: string) => Promise<any>;
       };
+      selection: {
+        get: () => Promise<string[]>;
+        set: (selection: string[]) => Promise<{ success: boolean }>;
+      };
     };
   }
 }

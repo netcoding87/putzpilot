@@ -12,7 +12,9 @@
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "electron-store": "^9.0.0"
+  },
   "devDependencies": {
     "@types/node": "^22.12.0",
     "concurrently": "^9.1.2",

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import Store from 'electron-store';
 
 const createWindow = () => {
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
@@ -41,6 +42,11 @@ type ChurchToolsCredentials = {
 };
 
 let sessionCookies: string | null = null;
+const store = new Store<{ selection: string[] }>({
+  defaults: {
+    selection: [],
+  },
+});
 
 const normalizeBaseUrl = (url: string) => url.replace(/\/$/, '');
 
@@ -117,7 +123,7 @@ ipcMain.handle('churchtools:persons', async (_event, baseUrl: string) => {
     const url = new URL(`${normalizeBaseUrl(baseUrl)}/api/persons`);
     url.searchParams.set('limit', String(limit));
     url.searchParams.set('page', String(page));
-    url.searchParams.set('with', 'personStatus');
+    url.searchParams.set('with', 'personStatus,rels');
 
     const payload = await fetchWithSession(url.toString());
     const chunk = Array.isArray(payload?.data)
@@ -151,32 +157,119 @@ ipcMain.handle('churchtools:persons', async (_event, baseUrl: string) => {
   let statuses: any[] = [];
   const statusEndpoints = ['/api/person/masterdata'];
 
-  const statusDebug: Array<{ endpoint: string; keys: string[]; count: number; error?: string }> = [];
-
   for (const endpoint of statusEndpoints) {
     try {
       const statusPayload = await fetchWithSession(
         `${normalizeBaseUrl(baseUrl)}${endpoint}`,
       );
       statuses = extractStatuses(statusPayload);
-      statusDebug.push({
-        endpoint,
-        keys: statusPayload && typeof statusPayload === 'object' ? Object.keys(statusPayload) : [],
-        count: statuses.length,
-      });
       if (statuses.length > 0) break;
-    } catch (err) {
-      statusDebug.push({
-        endpoint,
-        keys: [],
-        count: 0,
-        error: err instanceof Error ? err.message : 'Unknown error',
-      });
+    } catch {
       // try next endpoint
     }
   }
 
+  const extractRelations = (payload: any) => {
+    if (Array.isArray(payload?.data)) return payload.data;
+    if (Array.isArray(payload?.relationships)) return payload.relationships;
+    if (Array.isArray(payload?.relations)) return payload.relations;
+    if (Array.isArray(payload?.data?.data)) return payload.data.data;
+    if (Array.isArray(payload)) return payload;
+    return [];
+  };
+
+  const relationshipEndpoints = [
+    '/api/persons/relationships',
+    '/api/persons/relations',
+    '/api/relationships',
+    '/api/relations',
+  ];
+
+  let relations: any[] = [];
+  for (const endpoint of relationshipEndpoints) {
+    try {
+      const relPayload = await fetchWithSession(
+        `${normalizeBaseUrl(baseUrl)}${endpoint}`,
+      );
+      relations = extractRelations(relPayload);
+      if (relations.length > 0) break;
+    } catch {
+      // try next endpoint
+    }
+  }
+
+  if (relations.length > 0) {
+    const relsByPerson = new Map<string, any[]>();
+    const addRel = (id: string | number | null | undefined, rel: any) => {
+      if (id === undefined || id === null) return;
+      const key = String(id);
+      const existing = relsByPerson.get(key) ?? [];
+      relsByPerson.set(key, [...existing, rel]);
+    };
+
+    const dedupeKeyForRel = (rel: any) => {
+      const id = rel?.id ?? '';
+      const a = rel?.personAId ?? rel?.personId ?? rel?.person_id ?? '';
+      const b = rel?.personBId ?? rel?.relativeId ?? rel?.related_person_id ?? rel?.relatedPersonId ?? '';
+      const type = rel?.relationshipTypeId ?? rel?.relationshipType?.id ?? '';
+      return `${id}|${a}|${b}|${type}`;
+    };
+
+    const uniqueRelations = new Map<string, any>();
+    relations.forEach((rel) => {
+      const key = dedupeKeyForRel(rel);
+      if (!uniqueRelations.has(key)) {
+        uniqueRelations.set(key, rel);
+      }
+    });
+
+    Array.from(uniqueRelations.values()).forEach((rel) => {
+      addRel(rel.personAId, rel);
+      addRel(rel.personBId, rel);
+      addRel(rel.personId, rel);
+      addRel(rel.relativeId, rel);
+      addRel(rel.vater_id, rel);
+      addRel(rel.kind_id, rel);
+      addRel(rel.parentId, rel);
+      addRel(rel.childId, rel);
+      addRel(rel.fromId, rel);
+      addRel(rel.toId, rel);
+      addRel(rel.from_id, rel);
+      addRel(rel.to_id, rel);
+      addRel(rel.person_id, rel);
+      addRel(rel.related_person_id, rel);
+      addRel(rel.relatedPersonId, rel);
+    });
+
+    allPersons.forEach((person) => {
+      const personId = person?.id;
+      if (personId === undefined || personId === null) return;
+      const currentRels = person?.rels;
+      if (Array.isArray(currentRels) && currentRels.length > 0) return;
+      const rels = relsByPerson.get(String(personId)) ?? [];
+      if (rels.length > 0) {
+        const deduped = new Map<string, any>();
+        rels.forEach((rel) => {
+          const key = dedupeKeyForRel(rel);
+          if (!deduped.has(key)) {
+            deduped.set(key, rel);
+          }
+        });
+        person.rels = Array.from(deduped.values());
+      }
+    });
+  }
+
   return { data: allPersons, statuses };
+});
+
+ipcMain.handle('selection:get', () => {
+  return store.get('selection', []);
+});
+
+ipcMain.handle('selection:set', (_event, selection: string[]) => {
+  store.set('selection', selection);
+  return { success: true };
 });
 
 app.whenReady().then(() => {
