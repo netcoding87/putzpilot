@@ -31,9 +31,13 @@ const createWindow = () => {
     ? fileURLToPath(new URL('../src/preload.cjs', import.meta.url))
     : fileURLToPath(new URL('./preload.cjs', import.meta.url));
 
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const iconPath = path.resolve(__dirname, '../../assets/icon.png');
+
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    icon: iconPath,
     webPreferences: {
       preload: preloadPath,
     },

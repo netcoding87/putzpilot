@@ -7,6 +7,7 @@ import { buildPlan } from './lib/planning';
 import type { Person, PersonStatus, StatusGroup } from './types/people';
 
 export default function App() {
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [currentPage, setCurrentPage] = useState<'main' | 'settings'>('main');
   const [baseUrl, setBaseUrl] = useState('https://cgpb.church.tools');
   const [username, setUsername] = useState('nick.wittland@gmx.de');
@@ -78,6 +79,19 @@ export default function App() {
   }, []);
   const [endDate, setEndDate] = useState(formatDateInput(defaultEnd));
   const [plan, setPlan] = useState<Array<{ date: string; members: Person[] }>>([]);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('putzpilot-theme') as 'dark' | 'light' | null;
+    const initialTheme = savedTheme || 'dark';
+    setTheme(initialTheme);
+    document.documentElement.setAttribute('data-theme', initialTheme);
+  }, []);
+
+  const handleThemeChange = (newTheme: 'dark' | 'light') => {
+    setTheme(newTheme);
+    localStorage.setItem('putzpilot-theme', newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
+  };
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -414,7 +428,11 @@ export default function App() {
         />
       ) : (
         <div className="app">
-          <MainHeader onOpenSettings={() => setCurrentPage('settings')} />
+          <MainHeader
+            onOpenSettings={() => setCurrentPage('settings')}
+            theme={theme}
+            onThemeChange={handleThemeChange}
+          />
           <PlanSection
             startDate={startDate}
             endDate={endDate}

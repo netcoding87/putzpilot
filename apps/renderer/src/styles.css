@@ -34,12 +34,44 @@
   background: var(--color-bg);
 }
 
+:root[data-theme="light"] {
+  /* Primary Colors (Brand Core – Teal/Cyan, lighter for light mode) */
+  --color-primary: #0FBCC6;
+  --color-primary-dark: #0A8A92;
+  --color-primary-light: #6FEFF5;
+
+  /* Accent Colors (unchanged) */
+  --color-accent: #FF8A2A;
+  --color-accent-dark: #D96A00;
+  --color-accent-light: #FFC58A;
+
+  /* Neutrals (Light Mode) */
+  --color-bg: #FDFDFD;
+  --color-surface: #F3F5F7;
+  --color-surface-light: #E6E9ED;
+  --color-border: #C5CBD3;
+
+  /* Text Colors */
+  --text-primary: #1A1D20;
+  --text-secondary: #5A606A;
+  --text-disabled: #A8AEB7;
+
+  /* Status Colors */
+  --status-success: #2CCF9E;
+  --status-warning: #FF8A2A;
+  --status-error: #E64545;
+  --status-info: #0FBCC6;
+
+  color-scheme: light;
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .app {
@@ -316,22 +348,42 @@ input[type='checkbox'] {
 .app__header {
   display: flex;
   justify-content: space-between;
-  align-items: start;
+  align-items: flex-start;
   margin-bottom: 32px;
 }
 
-.header-title {
+.header-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   flex: 1;
 }
 
-.header-title h1 {
-  margin: 0 0 8px;
-  font-size: 2.5rem;
+.header-top {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
 }
 
-.header-title p {
+.header-icon {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+}
+
+.header-top h1 {
+  margin: 0;
+  font-size: 2.5rem;
+  /* color: var(--color-primary); */
+  line-height: 1.1;
+}
+
+.header-subtitle {
   margin: 0;
   color: var(--text-secondary);
+  font-size: 0.95rem;
+  padding-left: 12px;
+  padding-top: 12px;
 }
 
 .btn-settings {
@@ -346,6 +398,27 @@ input[type='checkbox'] {
 }
 
 .btn-settings:hover {
+  background: var(--color-surface-light);
+  border-color: var(--color-primary);
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-theme {
+  font-size: 1.5rem;
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--color-primary);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.btn-theme:hover {
   background: var(--color-surface-light);
   border-color: var(--color-primary);
 }
