@@ -31,10 +31,12 @@ export type Relation = {
 export type PersonStatus = {
   id?: number | string;
   name?: string;
+  nameTranslated?: string;
 };
 
 export type StatusGroup = {
   label: string;
+  labelTranslated: string;
   statusKey: string;
   persons: Person[];
 };

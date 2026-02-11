@@ -214,6 +214,13 @@ export default function App() {
       })
     : persons;
 
+  const getStatusTranslated = (statusKey: string) => {
+    const status = statuses.find(
+      (s) => s.name?.toLowerCase() === statusKey.toLowerCase()
+    );
+    return status?.nameTranslated || statusKey;
+  };
+
   const grouped = visiblePersons.reduce<Record<string, Person[]>>((acc, person) => {
     const key = statusKeyFor(person);
     if (!acc[key]) acc[key] = [];
@@ -224,23 +231,24 @@ export default function App() {
   const groups: StatusGroup[] = Object.entries(grouped)
     .map(([statusKey, groupPersons]) => ({
       label: statusKey,
+      labelTranslated: getStatusTranslated(statusKey),
       statusKey,
       persons: groupPersons,
     }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+    .sort((a, b) => a.labelTranslated.localeCompare(b.labelTranslated));
 
-  const groupButtons = ['Alle', ...groups.map((group) => group.label)];
+  const groupButtons = ['Alle', ...groups.map((group) => group.labelTranslated)];
   const groupCounts = groups.reduce<Record<string, number>>((acc, group) => {
-    acc[group.label] = group.persons.length;
+    acc[group.labelTranslated] = group.persons.length;
     return acc;
   }, {});
-  const currentActiveGroup = groups.some((group) => group.label === activeGroup)
+  const currentActiveGroup = groups.some((group) => group.labelTranslated === activeGroup)
     ? activeGroup
     : 'Alle';
   const activeGroups =
     currentActiveGroup === 'Alle'
       ? groups
-      : groups.filter((group) => group.label === currentActiveGroup);
+      : groups.filter((group) => group.labelTranslated === currentActiveGroup);
 
   const selectedPersons = useMemo(() => {
     if (selectedIds.size === 0) return [];

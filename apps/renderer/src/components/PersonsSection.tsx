@@ -48,7 +48,7 @@ export default function PersonsSection({
         return 'status-badge--red';
       case 'kindbis16':
         return 'status-badge--yellow';
-      case 'friend':
+      case 'status.friend':
         return 'status-badge--blue';
       case 'status.member':
         return 'status-badge--green';
@@ -57,6 +57,13 @@ export default function PersonsSection({
       default:
         return 'status-badge--gray';
     }
+  };
+
+  const getStatusTranslated = (statusName: string) => {
+    const status = statuses.find(
+      (s) => s.name?.toLowerCase() === statusName.toLowerCase()
+    );
+    return status?.nameTranslated || statusName;
   };
 
   return (
@@ -94,10 +101,6 @@ export default function PersonsSection({
               placeholder="Name, E‑Mail oder Status"
             />
           </label>
-          <details className="status-debug">
-            <summary>Status-Endpoint (JSON)</summary>
-            <pre>{JSON.stringify(statuses, null, 2)}</pre>
-          </details>
           {currentActiveGroup === 'Alle' ? (
             <ul className="list">
               {visiblePersons.map((person, index) => {
@@ -122,7 +125,7 @@ export default function PersonsSection({
                           <span
                             className={`status-badge ${statusClassFor(getStatus(person))}`}
                           >
-                            {getStatus(person)}
+                            {getStatusTranslated(getStatus(person))}
                           </span>
                         </div>
                         <span className="person-age">
@@ -139,7 +142,7 @@ export default function PersonsSection({
               {activeGroups.map((group) => (
                 <div key={group.statusKey} className="group">
                   <div className="group__header">
-                    <h3>{group.label}</h3>
+                    <h3>{group.labelTranslated}</h3>
                     <span>{group.persons.length} Personen</span>
                   </div>
                   <ul className="list">
@@ -165,7 +168,7 @@ export default function PersonsSection({
                                   <span
                                     className={`status-badge ${statusClassFor(getStatus(person))}`}
                                   >
-                                    {getStatus(person)}
+                                    {getStatusTranslated(getStatus(person))}
                                   </span>
                                 </div>
                                 <span className="person-age">

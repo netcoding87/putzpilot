@@ -217,11 +217,10 @@ button:disabled {
 
 .status-badge {
   font-size: 0.8rem;
-  font-weight: 700;
+  font-weight: 500;
   padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid transparent;
-  text-transform: lowercase;
   white-space: nowrap;
 }
 
@@ -253,31 +252,6 @@ button:disabled {
   background: #f3f4f6;
   color: #4b5563;
   border-color: #e5e7eb;
-}
-
-.status-debug {
-  margin: 16px 0 0;
-  padding: 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #f9fafb;
-}
-
-.status-debug summary {
-  cursor: pointer;
-  font-weight: 600;
-  color: #111827;
-}
-
-.status-debug pre {
-  margin: 12px 0 0;
-  padding: 12px;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  overflow: auto;
-  max-height: 300px;
 }
 
 .person-name {
