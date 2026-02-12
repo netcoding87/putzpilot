@@ -21,8 +21,10 @@ type GroupEditorProps = {
   onMovePerson: (personId: string, targetGroupId: string) => void;
   onMergeGroups: (sourceGroupId: string, targetGroupId: string) => void;
   onCreateGroup: (personId: string) => void;
-  onSave: () => void;
+  onCreateGroupFromGroup: (personId: string, afterGroupId: string) => void;
   onCancel: () => void;
+  onReload?: () => void;
+  isLoading?: boolean;
 };
 
 function DraggablePersonChip({ personId, person }: { personId: string; person: Person }) {
@@ -124,8 +126,10 @@ export default function GroupEditor({
   onMovePerson,
   onMergeGroups,
   onCreateGroup,
-  onSave,
+  onCreateGroupFromGroup,
   onCancel,
+  onReload,
+  isLoading = false,
 }: GroupEditorProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -137,6 +141,7 @@ export default function GroupEditor({
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<'person' | 'group' | null>(null);
+  const [sourceGroupId, setSourceGroupId] = useState<string | null>(null);
 
   const personMap = useMemo(() => {
     const map = new Map<string, Person>();
@@ -151,20 +156,37 @@ export default function GroupEditor({
   const handleDragStart = (event: DragStartEvent) => {
     const { data } = event.active;
     if (data?.current?.type === 'person') {
-      setActiveId(data.current.personId as string);
+      const personId = data.current.personId as string;
+      setActiveId(personId);
       setActiveType('person');
+      
+      // Find the source group containing this person
+      const sourceGroup = groups.find((g) => g.personIds.includes(personId));
+      setSourceGroupId(sourceGroup?.id ?? null);
     } else if (data?.current?.type === 'group') {
       setActiveId(data.current.groupId as string);
       setActiveType('group');
+      setSourceGroupId(null);
     }
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
+    // If person was dragged out of a group (no drop target)
+    if (!over && activeType === 'person' && sourceGroupId) {
+      const personId = active.data?.current?.personId as string;
+      onCreateGroupFromGroup(personId, sourceGroupId);
+      setActiveId(null);
+      setActiveType(null);
+      setSourceGroupId(null);
+      return;
+    }
+
     if (!over) {
       setActiveId(null);
       setActiveType(null);
+      setSourceGroupId(null);
       return;
     }
 
@@ -192,6 +214,7 @@ export default function GroupEditor({
 
     setActiveId(null);
     setActiveType(null);
+    setSourceGroupId(null);
   };
 
   const activePersonObject = activeType === 'person' && activeId ? personMap.get(activeId) : null;
@@ -212,38 +235,20 @@ export default function GroupEditor({
               onClick={onCancel}
               className="btn-secondary"
             >
-              Abbrechen
+              Personenauswahl
             </button>
-            <button
-              type="button"
-              onClick={onSave}
-              disabled={!validation.isValid}
-              className="btn-primary"
-            >
-              Speichern
-            </button>
+            {onReload && (
+              <button
+                type="button"
+                onClick={onReload}
+                disabled={isLoading}
+                className="btn-primary"
+              >
+                {isLoading ? 'Lade…' : 'Personen neu laden'}
+              </button>
+            )}
           </div>
         </div>
-
-        {!validation.isValid && (
-          <div className="validation-errors">
-            {validation.errors.map((error, index) => (
-              <p key={index} className="error">
-                ❌ {error}
-              </p>
-            ))}
-          </div>
-        )}
-
-        {validation.warnings.length > 0 && (
-          <div className="validation-warnings">
-            {validation.warnings.map((warning, index) => (
-              <p key={index} className="warning">
-                ⚠️ {warning}
-              </p>
-            ))}
-          </div>
-        )}
 
         <div className="groups-grid">
           {groups.map((group) => (

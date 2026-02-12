@@ -12,56 +12,54 @@ describe('App', () => {
     });
   });
 
-  it('shows load button and reveals filters after loading persons', async () => {
+  it('shows load button and automatically opens group editor after loading persons', async () => {
     const user = userEvent.setup();
     render(<App />);
 
     await waitFor(() => {
       const loadButton = screen.getByRole('button', { name: /personen laden/i });
       expect(loadButton).toBeEnabled();
-      expect(screen.queryByText('Suche')).toBeNull();
     });
 
     await user.click(screen.getByRole('button', { name: /personen laden/i }));
 
     await waitFor(() => {
+      expect(screen.getByText('Gruppen bearbeiten')).toBeInTheDocument();
       expect(screen.getByText('Anna Meyer')).toBeInTheDocument();
     });
 
-    expect(screen.getByRole('button', { name: /neu laden/i })).toBeInTheDocument();
-    expect(screen.getByText('Suche')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /personen neu laden/i })).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/nach person suchen/i)).toBeNull();
   });
 
-  it('renders group buttons after loading persons', async () => {
+  it('loads persons and creates groups automatically', async () => {
     const user = userEvent.setup();
     render(<App />);
 
     await user.click(screen.getByRole('button', { name: /personen laden/i }));
 
     await waitFor(() => {
+      expect(screen.getByText('Gruppen bearbeiten')).toBeInTheDocument();
       expect(screen.getByText('Anna Meyer')).toBeInTheDocument();
     });
 
-    expect(screen.getByRole('button', { name: /alle/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /status.member/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /status.guest/i })).toBeInTheDocument();
+    // Should show group editor with persons grouped
+    expect(screen.getByRole('button', { name: /personen neu laden/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /personenauswahl/i })).toBeInTheDocument();
   });
 
-  it('filters persons by search query', async () => {
+  it('shows group editor after loading persons', async () => {
     const user = userEvent.setup();
     render(<App />);
 
     await user.click(screen.getByRole('button', { name: /personen laden/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('Anna Meyer')).toBeInTheDocument();
+      expect(screen.getByText('Gruppen bearbeiten')).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole('button', { name: /alle/i }));
-    await user.type(screen.getByRole('searchbox'), 'clara');
-
-    expect(screen.getByText('Clara Schmidt')).toBeInTheDocument();
-    expect(screen.queryByText('Anna Meyer')).toBeNull();
+    // Should show group editor without search box
+    expect(screen.queryByPlaceholderText(/nach person suchen/i)).toBeNull();
   });
 
   it('shows settings page and handles connection test error', async () => {

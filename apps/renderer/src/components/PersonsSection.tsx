@@ -14,6 +14,7 @@ type PersonsSectionProps = {
   query: string;
   onQueryChange: (value: string) => void;
   onLoadPersons: () => void;
+  onReloadPersons: () => void;
   onToggleSelection: (person: Person, index: number) => void;
   getPersonKey: (person: Person, fallback: number) => string;
   getStatus: (person: Person) => string;
@@ -36,6 +37,7 @@ export default function PersonsSection({
   query,
   onQueryChange,
   onLoadPersons,
+  onReloadPersons,
   onToggleSelection,
   getPersonKey,
   getStatus,
@@ -70,27 +72,46 @@ export default function PersonsSection({
 
   return (
     <section className="card">
-      <div className="persons-header">
-        <h2>Personen ({persons.length})</h2>
-        <div className="persons-header-actions">
-          <button
-            type="button"
-            onClick={onEditGroups}
-            disabled={selectedIds.size === 0}
-            className="btn-secondary"
+      {persons.length === 0 ? (
+        <div className="empty-state">
+          <h2>Willkommen bei PutzPilot</h2>
+          <p>Lade Personen aus ChurchTools, um mit der Planerstellung zu beginnen.</p>
+          <button 
+            type="button" 
+            onClick={onLoadPersons} 
+            disabled={loading}
+            className="btn-primary btn-large"
           >
-            Gruppen bearbeiten
+            {loading ? 'Lade…' : 'Personen laden'}
           </button>
-          <button type="button" onClick={onLoadPersons} disabled={loading}>
-            {loading ? 'Lade…' : persons.length === 0 ? 'Personen laden' : 'Neu laden'}
-          </button>
+          {error && <p className="error" style={{ marginTop: '16px' }}>{error}</p>}
         </div>
-      </div>
-
-      {error && <p className="error">{error}</p>}
-
-      {persons.length === 0 ? null : (
+      ) : (
         <>
+          <div className="persons-header">
+            <h2>Personen ({persons.length})</h2>
+            <div className="persons-header-actions">
+              <button
+                type="button"
+                onClick={onEditGroups}
+                disabled={selectedIds.size === 0}
+                className="btn-secondary"
+              >
+                Gruppen bearbeiten
+              </button>
+              <button 
+                type="button" 
+                onClick={persons.length === 0 ? onLoadPersons : onReloadPersons} 
+                disabled={loading}
+                className="btn-primary"
+              >
+                {loading ? 'Lade…' : persons.length === 0 ? 'Personen laden' : 'Neu laden'}
+              </button>
+            </div>
+          </div>
+
+          {error && <p className="error">{error}</p>}
+
           <div className="filters">
             {groupButtons.map((label) => (
               <button

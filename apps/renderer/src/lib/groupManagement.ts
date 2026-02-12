@@ -127,6 +127,45 @@ export function createGroupWithPerson(
 }
 
 /**
+ * Create a new group with a person, placing it directly after the source group
+ */
+export function createGroupAfterSource(
+  groups: ManualGroup[],
+  personId: string,
+  afterGroupId: string,
+): ManualGroup[] {
+  // Remove person from all existing groups
+  const withoutPerson = groups.map((g) => ({
+    ...g,
+    personIds: g.personIds.filter((id) => id !== personId),
+  }));
+
+  // Create new group with this person
+  const newGroup: ManualGroup = {
+    id: `group-${Date.now()}`,
+    personIds: [personId],
+    createdAt: Date.now(),
+  };
+
+  // Find the index of the source group
+  const sourceIndex = withoutPerson.findIndex((g) => g.id === afterGroupId);
+  
+  if (sourceIndex === -1) {
+    // Source group not found, append at end
+    return [...withoutPerson, newGroup];
+  }
+
+  // Insert new group right after the source group
+  const result = [
+    ...withoutPerson.slice(0, sourceIndex + 1),
+    newGroup,
+    ...withoutPerson.slice(sourceIndex + 1),
+  ];
+
+  return result;
+}
+
+/**
  * Removes empty groups
  */
 export function cleanupEmptyGroups(groups: ManualGroup[]): ManualGroup[] {
@@ -207,26 +246,63 @@ export function mergeStoredWithHouseholdGroups(
     });
   });
 
-  // If there are new persons, add them to stored groups based on household grouping
+  // If there are no new persons, return cleaned stored groups
   if (newPersons.length === 0) {
     return cleanedStored;
   }
 
-  // Group new persons by household
-  const newPersonsByHousehold = new Map<string, string[]>();
-  householdGroups.forEach((hg) => {
-    const relevantNewPersons = hg.personIds.filter((id) => newPersons.includes(id));
-    if (relevantNewPersons.length > 0) {
-      newPersonsByHousehold.set(hg.id, relevantNewPersons);
+  // For each new person, try to find their household group in householdGroups
+  // and check if any member of that household is already in a stored group
+  const result = [...cleanedStored];
+  const assignedNewPersons = new Set<string>();
+
+  newPersons.forEach((newPersonId) => {
+    // Find which household group this person belongs to
+    const householdGroup = householdGroups.find((hg) => hg.personIds.includes(newPersonId));
+    if (!householdGroup) return;
+
+    // Check if any member of this household is in a stored group
+    let foundGroup: ManualGroup | null = null;
+    for (const storedGroup of result) {
+      const hasHouseholdMember = householdGroup.personIds.some((id) =>
+        storedGroup.personIds.includes(id)
+      );
+      if (hasHouseholdMember) {
+        foundGroup = storedGroup;
+        break;
+      }
+    }
+
+    if (foundGroup) {
+      // Add the new person to the existing group if not already there
+      if (!foundGroup.personIds.includes(newPersonId)) {
+        foundGroup.personIds.push(newPersonId);
+        assignedNewPersons.add(newPersonId);
+      }
     }
   });
 
-  // Add new persons as new groups
-  const newGroups: ManualGroup[] = Array.from(newPersonsByHousehold.values()).map((personIds) => ({
-    id: `group-${Date.now()}-${Math.random()}`,
-    personIds,
-    createdAt: Date.now(),
-  }));
+  // Create new groups for any remaining unassigned persons
+  const unassignedPersons = newPersons.filter((id) => !assignedNewPersons.has(id));
+  if (unassignedPersons.length > 0) {
+    // Group unassigned persons by household
+    const newPersonsByHousehold = new Map<string, string[]>();
+    householdGroups.forEach((hg) => {
+      const relevantPersons = hg.personIds.filter((id) => unassignedPersons.includes(id));
+      if (relevantPersons.length > 0) {
+        newPersonsByHousehold.set(hg.id, relevantPersons);
+      }
+    });
 
-  return [...cleanedStored, ...newGroups];
+    // Add new groups
+    const newGroups: ManualGroup[] = Array.from(newPersonsByHousehold.values()).map((personIds) => ({
+      id: `group-${Date.now()}-${Math.random()}`,
+      personIds,
+      createdAt: Date.now(),
+    }));
+
+    result.push(...newGroups);
+  }
+
+  return result;
 }

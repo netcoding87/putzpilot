@@ -12,6 +12,7 @@ import {
   movePerson,
   mergeGroups,
   createGroupWithPerson,
+  createGroupAfterSource,
   cleanupGroups,
   mergeStoredWithHouseholdGroups,
 } from './lib/groupManagement';
@@ -299,6 +300,7 @@ export default function App() {
       startDate,
       endDate,
       selectedPersons,
+      manualGroups,
       getHouseholdKey,
       getPersonKey,
     });
@@ -344,12 +346,11 @@ export default function App() {
           return ageValue === null || ageValue < 60;
         });
 
+      let selectedPersonList: string[];
       if (stored.length > 0) {
-        const filtered = withoutSeniors(stored);
-        setSelectedIds(new Set(filtered));
-        await window.putzpilot.selection.set(filtered);
+        selectedPersonList = withoutSeniors(stored);
       } else {
-        const defaults = nextPersons
+        selectedPersonList = nextPersons
           .filter((person) => {
             const status = (() => {
               if (person.personStatus?.name) return person.personStatus.name;
@@ -367,9 +368,123 @@ export default function App() {
             return status === 'status.member' && (ageValue === null || ageValue < 60);
           })
           .map((person, index) => getPersonKey(person, index));
-        setSelectedIds(new Set(defaults));
-        await window.putzpilot.selection.set(defaults);
       }
+      
+      setSelectedIds(new Set(selectedPersonList));
+      await window.putzpilot.selection.set(selectedPersonList);
+
+      // Automatically transition to group editor
+      const selectedPersonObjects = selectedPersonList
+        .map((id) => nextPersons.find((p, i) => getPersonKey(p, i) === id))
+        .filter(Boolean) as Person[];
+
+      const householdGroups = convertPersonsToGroups(
+        selectedPersonObjects,
+        (person) => {
+          const idKey = person.id !== undefined && person.id !== null ? String(person.id) : null;
+          if (idKey && householdMap.has(idKey)) {
+            return householdMap.get(idKey) ?? idKey;
+          }
+          return String(person.householdId ?? person.familyStatusId ?? person.lastName ?? person.id ?? '');
+        },
+        getPersonKey
+      );
+
+      const validPersonIds = new Set(selectedPersonList);
+      const merged = mergeStoredWithHouseholdGroups(manualGroups, householdGroups, validPersonIds);
+
+      setGroupsDraft(merged);
+      setViewMode('groups');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReloadPersons = async () => {
+    // Run full workflow: reload persons, apply filters, merge with stored groups, show group editor
+    if (!baseUrl || !username || !password) {
+      setError('Bitte zuerst die ChurchTools-Verbindung in den Einstellungen speichern.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await window.putzpilot.churchtools.login({ baseUrl, username, password });
+      const response = await window.putzpilot.churchtools.fetchPersons(baseUrl);
+
+      const data = response?.data ?? response?.persons ?? response;
+      const nextPersons = Array.isArray(data) ? data : [];
+      const nextStatuses = Array.isArray(response?.statuses) ? response.statuses : [];
+      setPersons(nextPersons);
+      setStatuses(nextStatuses);
+
+      // Save/update selected persons
+      const stored = await window.putzpilot.selection.get();
+      const personKeyMap = new Map<string, Person>();
+      nextPersons.forEach((person, index) => {
+        personKeyMap.set(getPersonKey(person, index), person);
+      });
+
+      const withoutSeniors = (ids: string[]) =>
+        ids.filter((id) => {
+          const person = personKeyMap.get(id);
+          const ageValue = person ? getAgeValue(person) : null;
+          return ageValue === null || ageValue < 60;
+        });
+
+      let selectedPersonList: string[];
+      if (stored.length > 0) {
+        selectedPersonList = withoutSeniors(stored);
+      } else {
+        selectedPersonList = nextPersons
+          .filter((person) => {
+            const status = (() => {
+              if (person.personStatus?.name) return person.personStatus.name;
+              if (typeof person.status === 'string') return person.status;
+              if (person.status?.name) return person.status.name;
+              if (person.statusId) {
+                const statusEntry = nextStatuses.find(
+                  (entry: PersonStatus) => `${entry.id}` === `${person.statusId}`,
+                );
+                return statusEntry?.name ?? `Status ${person.statusId}`;
+              }
+              return 'Unbekannt';
+            })();
+            const ageValue = getAgeValue(person);
+            return status === 'status.member' && (ageValue === null || ageValue < 60);
+          })
+          .map((person, index) => getPersonKey(person, index));
+      }
+      
+      setSelectedIds(new Set(selectedPersonList));
+      await window.putzpilot.selection.set(selectedPersonList);
+
+      // Now automatically transition to group editor
+      const selectedPersonObjects = selectedPersonList
+        .map((id) => nextPersons.find((p, i) => getPersonKey(p, i) === id))
+        .filter(Boolean) as Person[];
+
+      const householdGroups = convertPersonsToGroups(
+        selectedPersonObjects,
+        (person) => {
+          const idKey = person.id !== undefined && person.id !== null ? String(person.id) : null;
+          if (idKey && householdMap.has(idKey)) {
+            return householdMap.get(idKey) ?? idKey;
+          }
+          return String(person.householdId ?? person.familyStatusId ?? person.lastName ?? person.id ?? '');
+        },
+        getPersonKey
+      );
+
+      const validPersonIds = new Set(selectedPersonList);
+      const merged = mergeStoredWithHouseholdGroups(manualGroups, householdGroups, validPersonIds);
+
+      setGroupsDraft(merged);
+      setViewMode('groups');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unbekannter Fehler');
     } finally {
@@ -389,34 +504,53 @@ export default function App() {
     setViewMode('groups');
   };
 
-  const handleGroupMovePerson = (personId: string, targetGroupId: string) => {
+  const handleGroupMovePerson = async (personId: string, targetGroupId: string) => {
     setGroupsDraft((current) => {
       const moved = movePerson(current, personId, targetGroupId);
-      return cleanupGroups(moved, new Set(selectedPersons.map((p, i) => getPersonKey(p, i))));
+      const cleaned = cleanupGroups(moved, new Set(selectedPersons.map((p, i) => getPersonKey(p, i))));
+      // Auto-save to storage AND state
+      window.putzpilot.groups.set(cleaned);
+      setManualGroups(cleaned);
+      return cleaned;
     });
   };
 
-  const handleGroupMerge = (sourceGroupId: string, targetGroupId: string) => {
+  const handleGroupMerge = async (sourceGroupId: string, targetGroupId: string) => {
     setGroupsDraft((current) => {
       const merged = mergeGroups(current, sourceGroupId, targetGroupId);
-      return cleanupGroups(merged, new Set(selectedPersons.map((p, i) => getPersonKey(p, i))));
+      const cleaned = cleanupGroups(merged, new Set(selectedPersons.map((p, i) => getPersonKey(p, i))));
+      // Auto-save to storage AND state
+      window.putzpilot.groups.set(cleaned);
+      setManualGroups(cleaned);
+      return cleaned;
     });
   };
 
-  const handleGroupCreate = (personId: string) => {
+  const handleGroupCreate = async (personId: string) => {
     setGroupsDraft((current) => {
       const created = createGroupWithPerson(current, personId);
-      return cleanupGroups(created, new Set(selectedPersons.map((p, i) => getPersonKey(p, i))));
+      const cleaned = cleanupGroups(created, new Set(selectedPersons.map((p, i) => getPersonKey(p, i))));
+      // Auto-save to storage AND state
+      window.putzpilot.groups.set(cleaned);
+      setManualGroups(cleaned);
+      return cleaned;
     });
   };
 
-  const handleGroupSave = async () => {
-    setManualGroups(groupsDraft);
-    await window.putzpilot.groups.set(groupsDraft);
-    setViewMode('persons');
+  const handleGroupCreateFromGroup = async (personId: string, afterGroupId: string) => {
+    setGroupsDraft((current) => {
+      const created = createGroupAfterSource(current, personId, afterGroupId);
+      const cleaned = cleanupGroups(created, new Set(selectedPersons.map((p, i) => getPersonKey(p, i))));
+      // Auto-save to storage AND state
+      window.putzpilot.groups.set(cleaned);
+      setManualGroups(cleaned);
+      return cleaned;
+    });
   };
 
   const handleGroupCancel = () => {
+    // Update manualGroups from the draft (which already auto-saved to storage)
+    setManualGroups(groupsDraft);
     setViewMode('persons');
   };
 
@@ -518,8 +652,10 @@ export default function App() {
               onMovePerson={handleGroupMovePerson}
               onMergeGroups={handleGroupMerge}
               onCreateGroup={handleGroupCreate}
-              onSave={handleGroupSave}
+              onCreateGroupFromGroup={handleGroupCreateFromGroup}
               onCancel={handleGroupCancel}
+              onReload={handleReloadPersons}
+              isLoading={loading}
             />
           ) : (
             <PersonsSection
@@ -536,6 +672,7 @@ export default function App() {
               query={query}
               onQueryChange={setQuery}
               onLoadPersons={handleLoadPersons}
+              onReloadPersons={handleReloadPersons}
               onToggleSelection={toggleSelection}
               getPersonKey={getPersonKey}
               getStatus={getStatus}

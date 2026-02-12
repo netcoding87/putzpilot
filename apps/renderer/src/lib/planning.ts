@@ -1,4 +1,5 @@
 import type { Person } from '../types/people';
+import type { ManualGroup } from '../types/groups';
 
 type PlanEntry = { date: string; members: Person[] };
 
@@ -6,6 +7,7 @@ type BuildPlanParams = {
   startDate: string;
   endDate: string;
   selectedPersons: Person[];
+  manualGroups?: ManualGroup[];
   getHouseholdKey: (person: Person) => string | null;
   getPersonKey: (person: Person, fallback: number) => string;
   random?: () => number;
@@ -38,6 +40,7 @@ export const buildPlan = ({
   startDate,
   endDate,
   selectedPersons,
+  manualGroups,
   getHouseholdKey,
   getPersonKey,
   random,
@@ -76,65 +79,90 @@ export const buildPlan = ({
     selectedIdSet.add(getPersonNumericId(person, index, getPersonKey));
   });
 
-  interface UnionFind {
-    parent: Map<number, number>;
-    find(x: number): number;
-    union(x: number, y: number): void;
-  }
-  const uf: UnionFind = {
-    parent: new Map(),
-    find(x: number): number {
-      if (!this.parent.has(x)) {
-        this.parent.set(x, x);
-      }
-      const px = this.parent.get(x)!;
-      if (px !== x) {
-        this.parent.set(x, this.find(px));
-      }
-      return this.parent.get(x)!;
-    },
-    union(x: number, y: number): void {
-      const rx = this.find(x);
-      const ry = this.find(y);
-      if (rx !== ry) {
-        this.parent.set(rx, ry);
-      }
-    },
-  };
-
+  // Create a person lookup map
+  const personMap = new Map<string, Person>();
   selectedPersons.forEach((person, index) => {
-    const personId = getPersonNumericId(person, index, getPersonKey);
-    uf.find(personId);
-
-    if (Array.isArray(person.rels)) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      person.rels.forEach((rel: any) => {
-        const relatedId = rel.personBId ?? rel.relativeId;
-        if (relatedId && selectedIdSet.has(relatedId)) {
-          uf.union(personId, relatedId);
-        }
-      });
-    }
+    personMap.set(getPersonKey(person, index), person);
   });
 
   interface PersonGroup {
-    groupId: number;
+    groupId: number | string;
     members: Person[];
   }
-  const groupMap = new Map<number, Person[]>();
-  selectedPersons.forEach((person, index) => {
-    const personId = getPersonNumericId(person, index, getPersonKey);
-    const groupId = uf.find(personId);
-    if (!groupMap.has(groupId)) {
-      groupMap.set(groupId, []);
-    }
-    groupMap.get(groupId)!.push(person);
-  });
+  const groups: PersonGroup[] = [];
 
-  const groups: PersonGroup[] = Array.from(groupMap.entries()).map(([groupId, members]) => ({
-    groupId,
-    members,
-  }));
+  // If manual groups are provided, use them
+  if (manualGroups && manualGroups.length > 0) {
+    manualGroups.forEach((manualGroup, index) => {
+      const members = manualGroup.personIds
+        .map((personId) => personMap.get(personId))
+        .filter(Boolean) as Person[];
+      if (members.length > 0) {
+        groups.push({
+          groupId: manualGroup.id || `manual-${index}`,
+          members,
+        });
+      }
+    });
+  }
+
+  // If no manual groups or they don't cover everyone, fall back to household grouping
+  if (groups.length === 0) {
+    interface UnionFind {
+      parent: Map<number, number>;
+      find(x: number): number;
+      union(x: number, y: number): void;
+    }
+    const uf: UnionFind = {
+      parent: new Map(),
+      find(x: number): number {
+        if (!this.parent.has(x)) {
+          this.parent.set(x, x);
+        }
+        const px = this.parent.get(x)!;
+        if (px !== x) {
+          this.parent.set(x, this.find(px));
+        }
+        return this.parent.get(x)!;
+      },
+      union(x: number, y: number): void {
+        const rx = this.find(x);
+        const ry = this.find(y);
+        if (rx !== ry) {
+          this.parent.set(rx, ry);
+        }
+      },
+    };
+
+    selectedPersons.forEach((person, index) => {
+      const personId = getPersonNumericId(person, index, getPersonKey);
+      uf.find(personId);
+
+      if (Array.isArray(person.rels)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        person.rels.forEach((rel: any) => {
+          const relatedId = rel.personBId ?? rel.relativeId;
+          if (relatedId && selectedIdSet.has(relatedId)) {
+            uf.union(personId, relatedId);
+          }
+        });
+      }
+    });
+
+    const groupMap = new Map<number, Person[]>();
+    selectedPersons.forEach((person, index) => {
+      const personId = getPersonNumericId(person, index, getPersonKey);
+      const groupId = uf.find(personId);
+      if (!groupMap.has(groupId)) {
+        groupMap.set(groupId, []);
+      }
+      groupMap.get(groupId)!.push(person);
+    });
+
+    Array.from(groupMap.entries()).forEach(([groupId, members]) => {
+      groups.push({ groupId, members });
+    });
+  }
 
   let cyclePool = shuffle(groups);
   const uniqueHouseholds = new Set(
