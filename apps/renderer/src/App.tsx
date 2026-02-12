@@ -7,6 +7,7 @@ import SettingsPage from './components/SettingsPage';
 import { buildPlan } from './lib/planning';
 import type { Person, PersonStatus, StatusGroup } from './types/people';
 import type { ManualGroup } from './types/groups';
+import type { PlanHistory, SavedPlan } from './types/planning';
 import {
   convertPersonsToGroups,
   movePerson,
@@ -93,12 +94,19 @@ export default function App() {
   }, []);
   const [endDate, setEndDate] = useState(formatDateInput(defaultEnd));
   const [plan, setPlan] = useState<Array<{ date: string; members: Person[] }>>([]);
+  const [planHistory, setPlanHistory] = useState<PlanHistory>({ plans: [] });
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('putzpilot-theme') as 'dark' | 'light' | null;
     const initialTheme = savedTheme || 'dark';
     setTheme(initialTheme);
     document.documentElement.setAttribute('data-theme', initialTheme);
+
+    // Load plan history
+    window.putzpilot.plans.get().then((savedPlans) => {
+      setPlanHistory({ plans: savedPlans });
+    }).catch(console.error);
   }, []);
 
   const handleThemeChange = (newTheme: 'dark' | 'light') => {
@@ -301,6 +309,7 @@ export default function App() {
       endDate,
       selectedPersons,
       manualGroups,
+      history: planHistory,
       getHouseholdKey,
       getPersonKey,
     });
@@ -312,6 +321,7 @@ export default function App() {
 
     setError(null);
     setPlan(result.assignments);
+    setHasUnsavedChanges(true);
   };
 
   const handleLoadPersons = async () => {
@@ -554,6 +564,88 @@ export default function App() {
     setViewMode('persons');
   };
 
+  const handleSwapPersons = (
+    weekDate1: string,
+    personIndex1: number,
+    weekDate2: string,
+    personIndex2: number,
+  ) => {
+    setPlan((current) => {
+      const next = current.map((entry) => ({ ...entry, members: [...entry.members] }));
+      const entry1 = next.find((e) => e.date === weekDate1);
+      const entry2 = next.find((e) => e.date === weekDate2);
+
+      if (!entry1 || !entry2) return current;
+
+      const person1 = entry1.members[personIndex1];
+      const person2 = entry2.members[personIndex2];
+
+      if (!person1 || !person2) return current;
+
+      // Swap
+      entry1.members[personIndex1] = person2;
+      entry2.members[personIndex2] = person1;
+
+      setHasUnsavedChanges(true);
+      return next;
+    });
+  };
+
+  const handleReplacePerson = (weekDate: string, personIndex: number, newPerson: Person) => {
+    setPlan((current) => {
+      const next = current.map((entry) => ({ ...entry, members: [...entry.members] }));
+      const entry = next.find((e) => e.date === weekDate);
+
+      if (!entry) return current;
+
+      entry.members[personIndex] = newPerson;
+
+      setHasUnsavedChanges(true);
+      return next;
+    });
+  };
+
+  const handleSavePlan = async () => {
+    if (plan.length === 0) return;
+
+    // Check if plan already exists for this date range
+    const existingPlanIndex = planHistory.plans.findIndex((p) => {
+      const overlaps = 
+        (p.startDate <= endDate && p.endDate >= startDate) ||
+        (startDate <= p.endDate && endDate >= p.startDate);
+      return overlaps;
+    });
+
+    let shouldSave = true;
+    if (existingPlanIndex >= 0) {
+      const confirmOverwrite = window.confirm(
+        `Es existiert bereits eine Planung für diesen Zeitraum (${planHistory.plans[existingPlanIndex].startDate} - ${planHistory.plans[existingPlanIndex].endDate}).\n\nBeim Speichern wird diese überschrieben. Fortfahren?`
+      );
+      shouldSave = confirmOverwrite;
+    }
+
+    if (!shouldSave) return;
+
+    const newPlan: SavedPlan = {
+      id: `plan-${Date.now()}`,
+      startDate,
+      endDate,
+      assignments: plan.map((entry) => ({
+        date: entry.date,
+        personIds: entry.members.map((member, index) => getPersonKey(member, index)),
+      })),
+      savedAt: Date.now(),
+    };
+
+    // Remove overlapping plans and add new one
+    const updatedPlans = planHistory.plans.filter((p, i) => i !== existingPlanIndex);
+    updatedPlans.push(newPlan);
+
+    await window.putzpilot.plans.set(updatedPlans);
+    setPlanHistory({ plans: updatedPlans });
+    setHasUnsavedChanges(false);
+  };
+
   const toggleSelection = (person: Person, index: number) => {
     const key = getPersonKey(person, index);
     const next = new Set(selectedIds);
@@ -643,6 +735,12 @@ export default function App() {
             onGeneratePlan={generatePlan}
             selectedCount={selectedPersons.length}
             plan={plan}
+            allPersons={selectedPersons}
+            onSwapPersons={handleSwapPersons}
+            onReplacePerson={handleReplacePerson}
+            onSavePlan={handleSavePlan}
+            hasUnsavedChanges={hasUnsavedChanges}
+            getPersonKey={getPersonKey}
           />
           {viewMode === 'groups' ? (
             <GroupEditor

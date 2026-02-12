@@ -80,10 +80,21 @@ const store = new Store<{
     username: string;
     password: string; // encrypted
   };
+  plans?: Array<{
+    id: string;
+    startDate: string;
+    endDate: string;
+    assignments: Array<{
+      date: string;
+      personIds: string[];
+    }>;
+    savedAt: number;
+  }>;
 }>({
   defaults: {
     selection: [],
     groups: [],
+    plans: [],
   },
 });
 
@@ -340,6 +351,15 @@ ipcMain.handle('groups:get', () => {
 
 ipcMain.handle('groups:set', (_event, groups) => {
   store.set('groups', groups);
+  return { success: true };
+});
+
+ipcMain.handle('plans:get', () => {
+  return store.get('plans', []);
+});
+
+ipcMain.handle('plans:set', (_event, plans) => {
+  store.set('plans', plans);
   return { success: true };
 });
 

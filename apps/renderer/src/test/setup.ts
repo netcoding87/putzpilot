@@ -19,6 +19,16 @@ let groupsStore: Array<{
   sourceGroupIds?: string[];
   createdAt: string;
 }> = [];
+let plansStore: Array<{
+  id: string;
+  startDate: string;
+  endDate: string;
+  assignments: Array<{
+    date: string;
+    personIds: string[];
+  }>;
+  savedAt: number;
+}> = [];
 
 const buildApi = () => ({
   version: 'test',
@@ -61,6 +71,13 @@ const buildApi = () => ({
       return { success: true };
     },
   },
+  plans: {
+    get: async () => plansStore,
+    set: async (plans: typeof plansStore) => {
+      plansStore = plans;
+      return { success: true };
+    },
+  },
 });
 
 beforeAll(() => {
@@ -70,6 +87,7 @@ beforeAll(() => {
 beforeEach(() => {
   selectionStore = [];
   groupsStore = [];
+  plansStore = [];
   settingsStore = {
     baseUrl: 'https://cgpb.church.tools',
     username: 'test.user@example.com',

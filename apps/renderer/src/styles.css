@@ -13,6 +13,7 @@
   --color-bg: #0B0E12;
   --color-surface: #161A20;
   --color-surface-light: #242A33;
+  --color-surface-hover: #2A323C;
   --color-border: #3A404A;
 
   /* Text Colors */
@@ -49,6 +50,7 @@
   --color-bg: #FDFDFD;
   --color-surface: #F3F5F7;
   --color-surface-light: #E6E9ED;
+  --color-surface-hover: #DDE1E7;
   --color-border: #C5CBD3;
 
   /* Text Colors */
@@ -188,12 +190,94 @@ button:disabled {
 .plan-entry {
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  padding: 12px;
+  padding: 16px;
   background: var(--color-surface-light);
 }
 
 .plan-entry h3 {
-  margin: 0 0 8px;
+  margin: 0 0 12px;
+  color: var(--text-primary);
+  font-size: 1.1rem;
+}
+
+.plan-members-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.plan-person-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--color-surface);
+  border: 2px solid var(--color-border);
+  border-radius: 8px;
+  cursor: move;
+  transition: all 0.2s;
+  min-height: 40px;
+}
+
+.plan-person-cell:hover {
+  border-color: var(--color-primary);
+  background: var(--color-surface-hover);
+}
+
+.plan-person-cell.drop-target {
+  border-color: var(--color-accent);
+  background: var(--color-surface-hover);
+  box-shadow: 0 0 0 3px rgba(255, 138, 42, 0.1);
+}
+
+.plan-person-cell.dragging {
+  opacity: 0.5;
+}
+
+.plan-person-cell.dragging-overlay {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  cursor: grabbing;
+}
+
+.person-name {
+  flex: 1;
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.edit-person-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 4px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+}
+
+.edit-person-btn:hover {
+  opacity: 1;
+}
+
+.plan-actions {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.plan-actions button {
+  min-width: 160px;
 }
 
 .plan-table {
@@ -789,4 +873,175 @@ input[type='checkbox'] {
 
 .unassigned-persons .person-chip {
   flex-shrink: 0;
+}
+
+/* Modal Styles */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-content {
+  background: var(--color-surface);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background: var(--color-surface-hover);
+  color: var(--text-primary);
+}
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.modal-search {
+  margin-bottom: 16px;
+}
+
+.modal-search .search-input {
+  width: 100%;
+}
+
+.current-person-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--color-surface-light);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.current-person-info .label {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.current-person-info .name {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.person-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.person-list-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 16px;
+  background: var(--color-surface-light);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  width: 100%;
+}
+
+.person-list-item:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-primary);
+}
+
+.person-list-item .person-name {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.person-list-item .person-email {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.no-results {
+  padding: 32px;
+  text-align: center;
+}
+
+.no-results p {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.modal-footer button {
+  min-width: 100px;
 }
