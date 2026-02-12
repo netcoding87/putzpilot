@@ -70,6 +70,11 @@ type ChurchToolsCredentials = {
 let sessionCookies: string | null = null;
 const store = new Store<{
   selection: string[];
+  groups?: Array<{
+    id: string;
+    personIds: string[];
+    createdAt: number;
+  }>;
   settings?: {
     baseUrl: string;
     username: string;
@@ -78,6 +83,7 @@ const store = new Store<{
 }>({
   defaults: {
     selection: [],
+    groups: [],
   },
 });
 
@@ -325,6 +331,15 @@ ipcMain.handle('settings:set', (_event, settings: { baseUrl: string; username: s
     username: settings.username,
     password: settings.password ? encryptPassword(settings.password) : '',
   });
+  return { success: true };
+});
+
+ipcMain.handle('groups:get', () => {
+  return store.get('groups', []);
+});
+
+ipcMain.handle('groups:set', (_event, groups) => {
+  store.set('groups', groups);
   return { success: true };
 });
 

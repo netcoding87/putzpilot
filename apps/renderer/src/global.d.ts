@@ -26,6 +26,18 @@ declare global {
           password: string;
         }) => Promise<{ success: boolean }>;
       };
+      groups: {
+        get: () => Promise<Array<{
+          id: string;
+          personIds: string[];
+          createdAt: number;
+        }>>;
+        set: (groups: Array<{
+          id: string;
+          personIds: string[];
+          createdAt: number;
+        }>) => Promise<{ success: boolean }>;
+      };
     };
   }
 }

@@ -19,6 +19,7 @@ type PersonsSectionProps = {
   getStatus: (person: Person) => string;
   getAgeValue: (person: Person) => number | null;
   onSetActiveGroup: (value: string) => void;
+  onEditGroups: () => void;
 };
 
 export default function PersonsSection({
@@ -40,6 +41,7 @@ export default function PersonsSection({
   getStatus,
   getAgeValue,
   onSetActiveGroup,
+  onEditGroups,
 }: PersonsSectionProps) {
   const statusClassFor = (status: string) => {
     const normalized = status.trim().toLowerCase();
@@ -70,9 +72,19 @@ export default function PersonsSection({
     <section className="card">
       <div className="persons-header">
         <h2>Personen ({persons.length})</h2>
-        <button type="button" onClick={onLoadPersons} disabled={loading}>
-          {loading ? 'Lade…' : persons.length === 0 ? 'Personen laden' : 'Neu laden'}
-        </button>
+        <div className="persons-header-actions">
+          <button
+            type="button"
+            onClick={onEditGroups}
+            disabled={selectedIds.size === 0}
+            className="btn-secondary"
+          >
+            Gruppen bearbeiten
+          </button>
+          <button type="button" onClick={onLoadPersons} disabled={loading}>
+            {loading ? 'Lade…' : persons.length === 0 ? 'Personen laden' : 'Neu laden'}
+          </button>
+        </div>
       </div>
 
       {error && <p className="error">{error}</p>}

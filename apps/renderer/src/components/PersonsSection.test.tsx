@@ -30,6 +30,7 @@ describe('PersonsSection', () => {
         getStatus={() => 'status.member'}
         getAgeValue={() => 30}
         onSetActiveGroup={vi.fn()}
+        onEditGroups={vi.fn()}
       />,
     );
 
@@ -58,6 +59,7 @@ describe('PersonsSection', () => {
         getStatus={() => 'status.member'}
         getAgeValue={() => 30}
         onSetActiveGroup={vi.fn()}
+        onEditGroups={vi.fn()}
       />,
     );
 

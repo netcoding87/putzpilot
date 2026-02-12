@@ -1,10 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import MainHeader from './components/MainHeader';
 import PersonsSection from './components/PersonsSection';
+import GroupEditor from './components/GroupEditor';
 import PlanSection from './components/PlanSection';
 import SettingsPage from './components/SettingsPage';
 import { buildPlan } from './lib/planning';
 import type { Person, PersonStatus, StatusGroup } from './types/people';
+import type { ManualGroup } from './types/groups';
+import {
+  convertPersonsToGroups,
+  movePerson,
+  mergeGroups,
+  createGroupWithPerson,
+  cleanupGroups,
+  mergeStoredWithHouseholdGroups,
+} from './lib/groupManagement';
 
 export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -32,6 +42,9 @@ export default function App() {
   const [activeGroup, setActiveGroup] = useState<string>('status.member');
   const [query, setQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<'persons' | 'groups'>('persons');
+  const [manualGroups, setManualGroups] = useState<ManualGroup[]>([]);
+  const [groupsDraft, setGroupsDraft] = useState<ManualGroup[]>([]);
 
   const getDefaultStartDate = () => {
     const now = new Date();
@@ -119,6 +132,18 @@ export default function App() {
     };
     loadSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const loadGroups = async () => {
+      try {
+        const stored = await window.putzpilot.groups.get();
+        setManualGroups(stored);
+      } catch (err) {
+        console.error('Failed to load groups:', err);
+      }
+    };
+    loadGroups();
   }, []);
 
   const getStatus = (person: Person) => {
@@ -352,6 +377,49 @@ export default function App() {
     }
   };
 
+  const handleEditGroups = () => {
+    // Build household groups from selectedPersons
+    const householdGroups = convertPersonsToGroups(selectedPersons, getHouseholdKey, getPersonKey);
+    
+    // Merge with stored manual groups
+    const validPersonIds = new Set(selectedPersons.map((p, i) => getPersonKey(p, i)));
+    const merged = mergeStoredWithHouseholdGroups(manualGroups, householdGroups, validPersonIds);
+    
+    setGroupsDraft(merged);
+    setViewMode('groups');
+  };
+
+  const handleGroupMovePerson = (personId: string, targetGroupId: string) => {
+    setGroupsDraft((current) => {
+      const moved = movePerson(current, personId, targetGroupId);
+      return cleanupGroups(moved, new Set(selectedPersons.map((p, i) => getPersonKey(p, i))));
+    });
+  };
+
+  const handleGroupMerge = (sourceGroupId: string, targetGroupId: string) => {
+    setGroupsDraft((current) => {
+      const merged = mergeGroups(current, sourceGroupId, targetGroupId);
+      return cleanupGroups(merged, new Set(selectedPersons.map((p, i) => getPersonKey(p, i))));
+    });
+  };
+
+  const handleGroupCreate = (personId: string) => {
+    setGroupsDraft((current) => {
+      const created = createGroupWithPerson(current, personId);
+      return cleanupGroups(created, new Set(selectedPersons.map((p, i) => getPersonKey(p, i))));
+    });
+  };
+
+  const handleGroupSave = async () => {
+    setManualGroups(groupsDraft);
+    await window.putzpilot.groups.set(groupsDraft);
+    setViewMode('persons');
+  };
+
+  const handleGroupCancel = () => {
+    setViewMode('persons');
+  };
+
   const toggleSelection = (person: Person, index: number) => {
     const key = getPersonKey(person, index);
     const next = new Set(selectedIds);
@@ -442,26 +510,40 @@ export default function App() {
             selectedCount={selectedPersons.length}
             plan={plan}
           />
-          <PersonsSection
-            persons={persons}
-            statuses={statuses}
-            selectedIds={selectedIds}
-            loading={loading}
-            error={error}
-            groupButtons={groupButtons}
-            currentActiveGroup={currentActiveGroup}
-            groupCounts={groupCounts}
-            visiblePersons={visiblePersons}
-            activeGroups={activeGroups}
-            query={query}
-            onQueryChange={setQuery}
-            onLoadPersons={handleLoadPersons}
-            onToggleSelection={toggleSelection}
-            getPersonKey={getPersonKey}
-            getStatus={getStatus}
-            getAgeValue={getAgeValue}
-            onSetActiveGroup={setActiveGroup}
-          />
+          {viewMode === 'groups' ? (
+            <GroupEditor
+              groups={groupsDraft}
+              persons={selectedPersons}
+              getPersonKey={getPersonKey}
+              onMovePerson={handleGroupMovePerson}
+              onMergeGroups={handleGroupMerge}
+              onCreateGroup={handleGroupCreate}
+              onSave={handleGroupSave}
+              onCancel={handleGroupCancel}
+            />
+          ) : (
+            <PersonsSection
+              persons={persons}
+              statuses={statuses}
+              selectedIds={selectedIds}
+              loading={loading}
+              error={error}
+              groupButtons={groupButtons}
+              currentActiveGroup={currentActiveGroup}
+              groupCounts={groupCounts}
+              visiblePersons={visiblePersons}
+              activeGroups={activeGroups}
+              query={query}
+              onQueryChange={setQuery}
+              onLoadPersons={handleLoadPersons}
+              onToggleSelection={toggleSelection}
+              getPersonKey={getPersonKey}
+              getStatus={getStatus}
+              getAgeValue={getAgeValue}
+              onSetActiveGroup={setActiveGroup}
+              onEditGroups={handleEditGroups}
+            />
+          )}
         </div>
       )}
     </>

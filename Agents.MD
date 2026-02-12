@@ -56,3 +56,18 @@ Dieses Dokument ist ein lebendes Arbeits‑ und Kontextdokument für KI‑gestü
 - 2026‑02‑08: Initiale Agents.MD erstellt.
 - 2026‑02‑09: Projekt‑Scaffold (Monorepo, Electron + React) initialisiert.
 - 2026‑02‑11: Renderer-Test-Stack mit Vitest, RTL, user-event und MSW eingeführt.
+- 2026‑02‑11: Gruppen-Editor mit Drag-&-Drop implementiert (@dnd-kit), inklusive:
+  - Manuelle Bearbeitung von Haushalts-Gruppen
+  - Drag-&-Drop zum Verschieben von Personen zwischen Gruppen
+  - Zusammenführen mehrerer Gruppen (Join)
+  - Auflösen zusammengeführter Gruppen (Unjoin)
+  - Validierung (max. 10 Personen pro Gruppe)
+  - Persistente Speicherung in electron-store
+  - Auto-Cleanup bei Personen-Aktualisierung
+- 2026‑02‑11: Gruppen-Editor überarbeitet mit vereinfachtem Design:
+  - Gruppen ohne Namen, nur Mitgliederzahl (z.B. "3/10")
+  - Drag-&-Drop für ganze Gruppen (Gruppe auf Gruppe ziehen zum Zusammenführen)
+  - Neue Gruppe erstellen durch Ziehen einer Person auf "Neue Gruppe"-Karte
+  - Gruppen nicht selektierbar/checkbar
+  - Automatisches Haushalts-Grouping als initialer Zustand
+  - Zusammenführung von gespeicherten und neuen Gruppen bei Daten-Reload
