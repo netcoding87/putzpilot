@@ -14,6 +14,15 @@ describe('PlanSection', () => {
         onGeneratePlan={vi.fn()}
         selectedCount={0}
         plan={[]}
+        allPersons={[]}
+        onSwapPersons={vi.fn()}
+        onReplacePerson={vi.fn()}
+        onSavePlan={vi.fn()}
+        hasUnsavedChanges={false}
+        mode="planning"
+        onModeChange={vi.fn()}
+        historyYears={[]}
+        chronikEntries={[]}
       />,
     );
 
@@ -34,6 +43,15 @@ describe('PlanSection', () => {
         onGeneratePlan={onGeneratePlan}
         selectedCount={1}
         plan={plan}
+        allPersons={[]}
+        onSwapPersons={vi.fn()}
+        onReplacePerson={vi.fn()}
+        onSavePlan={vi.fn()}
+        hasUnsavedChanges={false}
+        mode="planning"
+        onModeChange={vi.fn()}
+        historyYears={[]}
+        chronikEntries={[]}
       />,
     );
 

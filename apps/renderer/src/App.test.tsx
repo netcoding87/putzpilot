@@ -29,7 +29,7 @@ describe('App', () => {
     });
 
     expect(screen.getByRole('button', { name: /personen neu laden/i })).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText(/nach person suchen/i)).toBeNull();
+    expect(screen.getByPlaceholderText(/nach person suchen/i)).toBeInTheDocument();
   });
 
   it('loads persons and creates groups automatically', async () => {
@@ -59,7 +59,7 @@ describe('App', () => {
     });
 
     // Should show group editor without search box
-    expect(screen.queryByPlaceholderText(/nach person suchen/i)).toBeNull();
+    expect(screen.getByPlaceholderText(/nach person suchen/i)).toBeInTheDocument();
   });
 
   it('shows settings page and handles connection test error', async () => {

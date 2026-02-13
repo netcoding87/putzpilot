@@ -49,9 +49,13 @@ function DraggablePersonChip({ personId, person }: { personId: string; person: P
 function DraggableGroupCard({
   group,
   personMap,
+  matchesSearch,
+  searchActive,
 }: {
   group: ManualGroup;
   personMap: Map<string, Person>;
+  matchesSearch: (person: Person) => boolean;
+  searchActive: boolean;
 }) {
   const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
     id: `group-${group.id}`,
@@ -72,6 +76,11 @@ function DraggableGroupCard({
   const validation = validateGroup(group);
   const isOverfull = group.personIds.length > 10;
 
+  const visiblePersonIds = group.personIds.filter((personId) => {
+    const person = personMap.get(personId);
+    return person ? matchesSearch(person) : false;
+  });
+
   return (
     <div
       ref={combinedRef}
@@ -83,11 +92,14 @@ function DraggableGroupCard({
       </div>
 
       <div className="group-members">
-        {group.personIds.map((personId) => {
+        {visiblePersonIds.map((personId) => {
           const person = personMap.get(personId);
           if (!person) return null;
           return <DraggablePersonChip key={personId} personId={personId} person={person} />;
         })}
+        {searchActive && visiblePersonIds.length === 0 && (
+          <div className="group-search-empty">Keine Treffer</div>
+        )}
       </div>
 
       {!validation.isValid && (
@@ -142,6 +154,7 @@ export default function GroupEditor({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<'person' | 'group' | null>(null);
   const [sourceGroupId, setSourceGroupId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const personMap = useMemo(() => {
     const map = new Map<string, Person>();
@@ -152,6 +165,14 @@ export default function GroupEditor({
   }, [persons, getPersonKey]);
 
   const validation = validateAllGroups(groups);
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const searchActive = normalizedQuery.length > 0;
+  const matchesSearch = (person: Person) => {
+    if (!searchActive) return true;
+    const fullName = `${person.firstName ?? ''} ${person.lastName ?? ''}`.toLowerCase();
+    const email = (person.email ?? '').toLowerCase();
+    return fullName.includes(normalizedQuery) || email.includes(normalizedQuery);
+  };
 
   const handleDragStart = (event: DragStartEvent) => {
     const { data } = event.active;
@@ -250,12 +271,27 @@ export default function GroupEditor({
           </div>
         </div>
 
+        <div className="search">
+          <label>
+            Suche
+            <input
+              className="search-input"
+              type="text"
+              placeholder="Nach Person suchen..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+          </label>
+        </div>
+
         <div className="groups-grid">
           {groups.map((group) => (
             <DraggableGroupCard
               key={group.id}
               group={group}
               personMap={personMap}
+              matchesSearch={matchesSearch}
+              searchActive={searchActive}
             />
           ))}
           <EmptyGroupCard />

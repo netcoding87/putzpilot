@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   DndContext,
   DragEndEvent,
@@ -11,6 +11,7 @@ import {
   useDroppable,
 } from '@dnd-kit/core';
 import type { Person } from '../types/people';
+import type { ChronikEntry, HistoryYear } from '../types/history';
 import PersonSelectorModal from './PersonSelectorModal';
 
 type PlanSectionProps = {
@@ -26,7 +27,10 @@ type PlanSectionProps = {
   onReplacePerson: (weekDate: string, personIndex: number, newPerson: Person) => void;
   onSavePlan: () => void;
   hasUnsavedChanges: boolean;
-  getPersonKey: (person: Person, fallback: number) => string;
+  mode: 'planning' | 'history' | 'chronik';
+  onModeChange: (mode: 'planning' | 'history' | 'chronik') => void;
+  historyYears: HistoryYear[];
+  chronikEntries: ChronikEntry[];
 };
 
 function DraggablePersonCell({
@@ -34,11 +38,13 @@ function DraggablePersonCell({
   weekDate,
   personIndex,
   onEdit,
+  isDuplicate,
 }: {
   person: Person;
   weekDate: string;
   personIndex: number;
   onEdit: () => void;
+  isDuplicate: boolean;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `person-${weekDate}-${personIndex}`,
@@ -59,7 +65,7 @@ function DraggablePersonCell({
   return (
     <div
       ref={combinedRef}
-      className={`plan-person-cell ${isOver ? 'drop-target' : ''} ${isDragging ? 'dragging' : ''}`}
+      className={`plan-person-cell ${isDuplicate ? 'duplicate' : ''} ${isOver ? 'drop-target' : ''} ${isDragging ? 'dragging' : ''}`}
       {...listeners}
       {...attributes}
       style={{ opacity: isDragging ? 0.5 : 1 }}
@@ -95,7 +101,10 @@ export default function PlanSection({
   onReplacePerson,
   onSavePlan,
   hasUnsavedChanges,
-  getPersonKey,
+  mode,
+  onModeChange,
+  historyYears,
+  chronikEntries,
 }: PlanSectionProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -108,6 +117,17 @@ export default function PlanSection({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activePerson, setActivePerson] = useState<Person | null>(null);
   const [editingPosition, setEditingPosition] = useState<{ weekDate: string; personIndex: number } | null>(null);
+  const [activeHistoryYear, setActiveHistoryYear] = useState<string | null>(null);
+  const [chronikQuery, setChronikQuery] = useState('');
+
+  useEffect(() => {
+    if (historyYears.length === 0) return;
+    const latestYear = historyYears[historyYears.length - 1].year;
+    const exists = activeHistoryYear && historyYears.some((year) => year.year === activeHistoryYear);
+    if (!exists) {
+      setActiveHistoryYear(latestYear);
+    }
+  }, [activeHistoryYear, historyYears]);
 
   const handleDragStart = (event: DragStartEvent) => {
     const { data } = event.active;
@@ -165,17 +185,204 @@ export default function PlanSection({
     ? plan.find((e) => e.date === editingPosition.weekDate)?.members[editingPosition.personIndex]
     : undefined;
 
+  const getPersonIdentity = (person: Person) => {
+    if (person.id !== undefined && person.id !== null) return String(person.id);
+    if (person.email) return person.email;
+    return `${person.firstName ?? ''}-${person.lastName ?? ''}`.trim();
+  };
+
   // Get min date (today)
   const today = new Date().toISOString().split('T')[0];
 
-  return (
+  const headerTitle =
+    mode === 'planning'
+      ? 'Planung'
+      : mode === 'history'
+        ? 'Vergangene Planungen'
+        : 'Putzchronik';
+
+  const renderHeaderActions = () => {
+    if (mode === 'planning') {
+      return (
+        <button
+          type="button"
+          className="btn-icon"
+          onClick={() => onModeChange('history')}
+          title="Historie anzeigen"
+          aria-label="Historie anzeigen"
+        >
+          🗂
+        </button>
+      );
+    }
+
+    if (mode === 'history') {
+      return (
+        <>
+          <button
+            type="button"
+            className="btn-icon"
+            onClick={() => onModeChange('chronik')}
+            title="Chronik anzeigen"
+            aria-label="Chronik anzeigen"
+          >
+            📜
+          </button>
+          <button
+            type="button"
+            className="btn-icon"
+            onClick={() => onModeChange('planning')}
+            title="Zur Planung"
+            aria-label="Zur Planung"
+          >
+            🗓
+          </button>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <button
+          type="button"
+          className="btn-icon"
+          onClick={() => onModeChange('history')}
+          title="Historie anzeigen"
+          aria-label="Historie anzeigen"
+        >
+          🗂
+        </button>
+        <button
+          type="button"
+          className="btn-icon"
+          onClick={() => onModeChange('planning')}
+          title="Zur Planung"
+          aria-label="Zur Planung"
+        >
+          🗓
+        </button>
+      </>
+    );
+  };
+
+  const renderHistoryView = () => {
+    if (historyYears.length === 0) {
+      return <p>Keine Historie vorhanden.</p>;
+    }
+
+    const currentYear = historyYears.find((year) => year.year === activeHistoryYear) ?? historyYears[0];
+
+    return (
+      <>
+        <div className="history-year-tabs">
+          {historyYears.map((year) => (
+            <button
+              key={year.year}
+              type="button"
+              className={`history-year-tab ${year.year === currentYear.year ? 'active' : ''}`}
+              onClick={() => setActiveHistoryYear(year.year)}
+            >
+              {year.year}
+            </button>
+          ))}
+        </div>
+
+        <div className="plan-list">
+          {currentYear.assignments.map((entry) => (
+            <div key={entry.date} className="plan-entry">
+              <h3>
+                {new Date(entry.date).toLocaleDateString('de-DE', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                })}
+              </h3>
+              <table className="plan-table">
+                <tbody>
+                  {[entry.members.slice(0, 5), entry.members.slice(5, 10)].map((row, rowIndex) => (
+                    <tr key={`${entry.date}-row-${rowIndex}`}>
+                      {Array.from({ length: 5 }).map((_, colIndex) => {
+                        const member = row[colIndex];
+                        return (
+                          <td key={`${entry.date}-${rowIndex}-${colIndex}`}>
+                            {member ?? ''}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  };
+
+  const renderChronikView = () => {
+    if (chronikEntries.length === 0) {
+      return <p>Keine Chronikdaten vorhanden.</p>;
+    }
+
+    const normalizedQuery = chronikQuery.trim().toLowerCase();
+    const filteredChronikEntries = normalizedQuery
+      ? chronikEntries.filter((entry) => {
+          const nameMatch = entry.name.toLowerCase().includes(normalizedQuery);
+          const dateMatch = entry.dates.some((date) => date.toLowerCase().includes(normalizedQuery));
+          return nameMatch || dateMatch;
+        })
+      : chronikEntries;
+
+    return (
+      <>
+        <div className="search">
+          <label>
+            Suche
+            <input
+              className="search-input"
+              type="text"
+              placeholder="Nach Person oder Datum suchen..."
+              value={chronikQuery}
+              onChange={(event) => setChronikQuery(event.target.value)}
+            />
+          </label>
+        </div>
+
+        <div className="chronik-list">
+          {filteredChronikEntries.length > 0 ? (
+            filteredChronikEntries.map((entry) => (
+              <div key={entry.name} className="chronik-entry">
+                <div className="chronik-name">{entry.name}</div>
+                <div className="chronik-dates">
+                  {entry.dates.map((date, index) => (
+                    <span key={`${entry.name}-${index}`} className="chronik-date">
+                      {date}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))
+          ) : (
+            <p>Keine Treffer gefunden.</p>
+          )}
+        </div>
+      </>
+    );
+  };
+
+  const renderPlanningView = () => (
     <DndContext
       sensors={sensors}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
       <section className="card">
-        <h2>Planung</h2>
+        <div className="plan-header">
+          <h2>{headerTitle}</h2>
+          <div className="plan-header-actions">{renderHeaderActions()}</div>
+        </div>
         <div className="planning">
           <label>
             Startdatum
@@ -207,15 +414,27 @@ export default function PlanSection({
                 <div key={entry.date} className="plan-entry">
                   <h3>{new Date(entry.date).toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h3>
                   <div className="plan-members-grid">
-                    {entry.members.map((member, index) => (
-                      <DraggablePersonCell
-                        key={`${entry.date}-${index}`}
-                        person={member}
-                        weekDate={entry.date}
-                        personIndex={index}
-                        onEdit={() => handleEditPerson(entry.date, index)}
-                      />
-                    ))}
+                    {(() => {
+                      const counts = entry.members.reduce<Record<string, number>>((acc, current) => {
+                        const key = getPersonIdentity(current);
+                        acc[key] = (acc[key] ?? 0) + 1;
+                        return acc;
+                      }, {});
+                      return entry.members.map((member, index) => {
+                        const personKey = getPersonIdentity(member);
+                        const isDuplicate = (counts[personKey] ?? 0) > 1;
+                        return (
+                          <DraggablePersonCell
+                            key={`${entry.date}-${index}`}
+                            person={member}
+                            weekDate={entry.date}
+                            personIndex={index}
+                            onEdit={() => handleEditPerson(entry.date, index)}
+                            isDuplicate={isDuplicate}
+                          />
+                        );
+                      });
+                    })()}
                   </div>
                 </div>
               ))}
@@ -255,5 +474,19 @@ export default function PlanSection({
         />
       )}
     </DndContext>
+  );
+
+  if (mode === 'planning') {
+    return renderPlanningView();
+  }
+
+  return (
+    <section className="card">
+      <div className="plan-header">
+        <h2>{headerTitle}</h2>
+        <div className="plan-header-actions">{renderHeaderActions()}</div>
+      </div>
+      {mode === 'history' ? renderHistoryView() : renderChronikView()}
+    </section>
   );
 }

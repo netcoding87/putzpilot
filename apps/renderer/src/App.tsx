@@ -8,6 +8,9 @@ import { buildPlan } from './lib/planning';
 import type { Person, PersonStatus, StatusGroup } from './types/people';
 import type { ManualGroup } from './types/groups';
 import type { PlanHistory, SavedPlan } from './types/planning';
+import type { HistoryYear, ChronikEntry } from './types/history';
+import planHistorySeed from './data/planHistorySeed.json';
+import chronikSeed from './data/chronikSeed.json';
 import {
   convertPersonsToGroups,
   movePerson,
@@ -96,6 +99,7 @@ export default function App() {
   const [plan, setPlan] = useState<Array<{ date: string; members: Person[] }>>([]);
   const [planHistory, setPlanHistory] = useState<PlanHistory>({ plans: [] });
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [planView, setPlanView] = useState<'planning' | 'history' | 'chronik'>('planning');
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('putzpilot-theme') as 'dark' | 'light' | null;
@@ -302,6 +306,69 @@ export default function App() {
     if (selectedIds.size === 0) return [];
     return persons.filter((person, index) => selectedIds.has(getPersonKey(person, index)));
   }, [persons, selectedIds]);
+
+  const personNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    persons.forEach((person, index) => {
+      const key = getPersonKey(person, index);
+      const name = `${person.firstName ?? ''} ${person.lastName ?? ''}`.trim();
+      map.set(key, name || key);
+    });
+    return map;
+  }, [persons]);
+
+  const savedHistoryYears = useMemo<HistoryYear[]>(() => {
+    const byYear = new Map<string, HistoryYear>();
+    planHistory.plans.forEach((plan) => {
+      plan.assignments.forEach((assignment) => {
+        const year = assignment.date.slice(0, 4);
+        const members = assignment.personIds.map((id) => personNameMap.get(id) ?? id);
+        const existing = byYear.get(year) ?? { year, assignments: [] };
+        existing.assignments.push({ date: assignment.date, members });
+        byYear.set(year, existing);
+      });
+    });
+
+    return Array.from(byYear.values()).map((yearData) => ({
+      year: yearData.year,
+      assignments: yearData.assignments.sort((a, b) => a.date.localeCompare(b.date)),
+    }));
+  }, [planHistory.plans, personNameMap]);
+
+  const historyYears = useMemo<HistoryYear[]>(() => {
+    const seedYears = (planHistorySeed as HistoryYear[]).map((year) => ({
+      year: year.year,
+      assignments: [...year.assignments],
+    }));
+
+    const merged = new Map<string, HistoryYear>();
+    seedYears.forEach((year) => merged.set(year.year, year));
+
+    savedHistoryYears.forEach((year) => {
+      const existing = merged.get(year.year);
+      if (!existing) {
+        merged.set(year.year, year);
+        return;
+      }
+
+      const assignmentsByDate = new Map(existing.assignments.map((a) => [a.date, a]));
+      year.assignments.forEach((assignment) => {
+        assignmentsByDate.set(assignment.date, assignment);
+      });
+
+      existing.assignments = Array.from(assignmentsByDate.values()).sort((a, b) =>
+        a.date.localeCompare(b.date),
+      );
+      merged.set(year.year, existing);
+    });
+
+    return Array.from(merged.values()).sort((a, b) => a.year.localeCompare(b.year));
+  }, [savedHistoryYears]);
+
+  const chronikEntries = useMemo<ChronikEntry[]>(
+    () => chronikSeed as ChronikEntry[],
+    [],
+  );
 
   const generatePlan = () => {
     const result = buildPlan({
@@ -740,7 +807,10 @@ export default function App() {
             onReplacePerson={handleReplacePerson}
             onSavePlan={handleSavePlan}
             hasUnsavedChanges={hasUnsavedChanges}
-            getPersonKey={getPersonKey}
+            mode={planView}
+            onModeChange={setPlanView}
+            historyYears={historyYears}
+            chronikEntries={chronikEntries}
           />
           {viewMode === 'groups' ? (
             <GroupEditor
