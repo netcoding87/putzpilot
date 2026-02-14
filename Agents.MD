@@ -71,6 +71,13 @@ Dieses Dokument ist ein lebendes Arbeits‑ und Kontextdokument für KI‑gestü
   - Gruppen nicht selektierbar/checkbar
   - Automatisches Haushalts-Grouping als initialer Zustand
   - Zusammenführung von gespeicherten und neuen Gruppen bei Daten-Reload- 2026‑02‑12: Workflow für Personenladen und Gruppierung implementiert
+- 2026‑02‑13: Fairness-Planung berücksichtigt Seed-Historie (ODS), gemappt über Namen auf Personen-IDs.
+- 2026‑02‑13: Fairness-Planung dynamisiert:
+   - Keine feste Tage-Schwelle; Auswahl basiert auf ältesten letzten Zuweisungen
+   - Historie wird nach jeder geplanten Woche aktualisiert
+   - Gruppen werden als atomar behandelt (keine Aufteilung in der Planung)
+   - Suchfunktion zu History-Seite hinzugefügt (komplementär zu Chronik-Suche)
+- 2026‑02‑13: Alias-Mapping fuer manuelle Namensvarianten eingefuehrt (nameAliases.json).
 
 ## Core Workflow: Personenladen & Gruppierung
 

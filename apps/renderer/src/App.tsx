@@ -11,6 +11,7 @@ import type { PlanHistory, SavedPlan } from './types/planning';
 import type { HistoryYear, ChronikEntry } from './types/history';
 import planHistorySeed from './data/planHistorySeed.json';
 import chronikSeed from './data/chronikSeed.json';
+import nameAliases from './data/nameAliases.json';
 import {
   convertPersonsToGroups,
   movePerson,
@@ -317,6 +318,134 @@ export default function App() {
     return map;
   }, [persons]);
 
+  const normalizeName = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const nameToIdMap = useMemo(() => {
+    const counts = new Map<string, number>();
+    const idByKey = new Map<string, string>();
+
+    const addKey = (key: string, id: string) => {
+      if (!key) return;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+      if (!idByKey.has(key)) {
+        idByKey.set(key, id);
+      }
+    };
+
+    const getNameVariants = (firstName: string, lastName: string) => {
+      const first = normalizeName(firstName);
+      const last = normalizeName(lastName);
+      const tokens = first.split(' ').filter(Boolean);
+      const firstToken = tokens[0] ?? '';
+      const variants = [
+        normalizeName(`${first} ${last}`),
+        normalizeName(`${last} ${first}`),
+      ];
+      if (firstToken && firstToken !== first) {
+        variants.push(normalizeName(`${firstToken} ${last}`));
+        variants.push(normalizeName(`${last} ${firstToken}`));
+      }
+      return variants.filter(Boolean);
+    };
+
+    persons.forEach((person, index) => {
+      const id = getPersonKey(person, index);
+      const first = person.firstName ?? '';
+      const last = person.lastName ?? '';
+      getNameVariants(first, last).forEach((variant) => addKey(variant, id));
+    });
+
+    const uniqueMap = new Map<string, string>();
+    idByKey.forEach((id, key) => {
+      if (counts.get(key) === 1) {
+        uniqueMap.set(key, id);
+      }
+    });
+
+    const aliasEntries = Array.isArray(nameAliases)
+      ? (nameAliases as Array<{ canonical: string; aliases: string[] }>)
+      : [];
+
+    aliasEntries.forEach((entry) => {
+      const canonicalKey = normalizeName(entry.canonical ?? '');
+      if (!canonicalKey) return;
+      const canonicalId = uniqueMap.get(canonicalKey);
+      if (!canonicalId) return;
+
+      (entry.aliases ?? []).forEach((alias) => {
+        const aliasKey = normalizeName(alias ?? '');
+        if (!aliasKey) return;
+        const existing = uniqueMap.get(aliasKey);
+        if (existing && existing !== canonicalId) return;
+        uniqueMap.set(aliasKey, canonicalId);
+      });
+    });
+
+    return uniqueMap;
+  }, [persons]);
+
+  const seedHistoryForPlanning = useMemo<PlanHistory>(() => {
+    const getNameCandidates = (name: string) => {
+      const cleaned = name.replace(/\s*\([^)]*\)/g, '').trim();
+      const candidates = [cleaned];
+      if (cleaned.includes(',')) {
+        const [last, first] = cleaned.split(',').map((part) => part.trim());
+        if (first && last) {
+          candidates.push(`${first} ${last}`);
+        }
+      }
+      const tokens = cleaned.split(' ').filter(Boolean);
+      if (tokens.length >= 3) {
+        candidates.push(`${tokens[0]} ${tokens[tokens.length - 1]}`);
+      }
+      return candidates.map((candidate) => normalizeName(candidate)).filter(Boolean);
+    };
+
+    const plans: PlanHistory['plans'] = [];
+
+    (planHistorySeed as HistoryYear[]).forEach((year) => {
+      const assignments = year.assignments
+        .map((assignment) => {
+          const personIds = assignment.members
+            .flatMap((name) => {
+              const candidates = getNameCandidates(name);
+              const match = candidates.find((candidate) => nameToIdMap.has(candidate));
+              return match ? [nameToIdMap.get(match)!] : [];
+            })
+            .filter(Boolean);
+
+          return personIds.length > 0
+            ? { date: assignment.date, personIds }
+            : null;
+        })
+        .filter((assignment): assignment is { date: string; personIds: string[] } =>
+          assignment !== null,
+        )
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      if (assignments.length === 0) return;
+
+      plans.push({
+        id: `seed-${year.year}`,
+        startDate: assignments[0].date,
+        endDate: assignments[assignments.length - 1].date,
+        assignments,
+        savedAt: 0,
+      });
+    });
+
+    return { plans };
+  }, [nameToIdMap]);
+
+  const combinedPlanningHistory = useMemo<PlanHistory>(
+    () => ({ plans: [...seedHistoryForPlanning.plans, ...planHistory.plans] }),
+    [seedHistoryForPlanning.plans, planHistory.plans],
+  );
+
   const savedHistoryYears = useMemo<HistoryYear[]>(() => {
     const byYear = new Map<string, HistoryYear>();
     planHistory.plans.forEach((plan) => {
@@ -376,7 +505,7 @@ export default function App() {
       endDate,
       selectedPersons,
       manualGroups,
-      history: planHistory,
+      history: combinedPlanningHistory,
       getHouseholdKey,
       getPersonKey,
     });

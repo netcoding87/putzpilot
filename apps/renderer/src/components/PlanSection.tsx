@@ -118,6 +118,7 @@ export default function PlanSection({
   const [activePerson, setActivePerson] = useState<Person | null>(null);
   const [editingPosition, setEditingPosition] = useState<{ weekDate: string; personIndex: number } | null>(null);
   const [activeHistoryYear, setActiveHistoryYear] = useState<string | null>(null);
+  const [historyQuery, setHistoryQuery] = useState('');
   const [chronikQuery, setChronikQuery] = useState('');
 
   useEffect(() => {
@@ -272,6 +273,31 @@ export default function PlanSection({
 
     const currentYear = historyYears.find((year) => year.year === activeHistoryYear) ?? historyYears[0];
 
+    const normalizedQuery = historyQuery.trim().toLowerCase();
+    const filteredAssignments = normalizedQuery
+      ? currentYear.assignments.filter((entry) => {
+          // Search in date
+          const dateMatch = new Date(entry.date)
+            .toLocaleDateString('de-DE', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            })
+            .toLowerCase()
+            .includes(normalizedQuery);
+          
+          // Search in members
+          const memberMatch = entry.members.some((member) =>
+            typeof member === 'string'
+              ? member.toLowerCase().includes(normalizedQuery)
+              : `${member.firstName ?? ''} ${member.lastName ?? ''}`.toLowerCase().includes(normalizedQuery),
+          );
+          
+          return dateMatch || memberMatch;
+        })
+      : currentYear.assignments;
+
     return (
       <>
         <div className="history-year-tabs">
@@ -287,35 +313,52 @@ export default function PlanSection({
           ))}
         </div>
 
+        <div className="search">
+          <label>
+            Suche
+            <input
+              className="search-input"
+              type="text"
+              placeholder="Nach Person oder Datum suchen..."
+              value={historyQuery}
+              onChange={(event) => setHistoryQuery(event.target.value)}
+            />
+          </label>
+        </div>
+
         <div className="plan-list">
-          {currentYear.assignments.map((entry) => (
-            <div key={entry.date} className="plan-entry">
-              <h3>
-                {new Date(entry.date).toLocaleDateString('de-DE', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                })}
-              </h3>
-              <table className="plan-table">
-                <tbody>
-                  {[entry.members.slice(0, 5), entry.members.slice(5, 10)].map((row, rowIndex) => (
-                    <tr key={`${entry.date}-row-${rowIndex}`}>
-                      {Array.from({ length: 5 }).map((_, colIndex) => {
-                        const member = row[colIndex];
-                        return (
-                          <td key={`${entry.date}-${rowIndex}-${colIndex}`}>
-                            {member ?? ''}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))}
+          {filteredAssignments.length > 0 ? (
+            filteredAssignments.map((entry) => (
+              <div key={entry.date} className="plan-entry">
+                <h3>
+                  {new Date(entry.date).toLocaleDateString('de-DE', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </h3>
+                <table className="plan-table">
+                  <tbody>
+                    {[entry.members.slice(0, 5), entry.members.slice(5, 10)].map((row, rowIndex) => (
+                      <tr key={`${entry.date}-row-${rowIndex}`}>
+                        {Array.from({ length: 5 }).map((_, colIndex) => {
+                          const member = row[colIndex];
+                          return (
+                            <td key={`${entry.date}-${rowIndex}-${colIndex}`}>
+                              {member ?? ''}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))
+          ) : (
+            <p>Keine Treffer gefunden.</p>
+          )}
         </div>
       </>
     );

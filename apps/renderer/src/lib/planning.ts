@@ -85,6 +85,7 @@ const getGroupPriority = (
   return sum === Infinity ? Infinity : sum / memberPriorities.length;
 };
 
+
 export const buildPlan = ({
   startDate,
   endDate,
@@ -217,115 +218,109 @@ export const buildPlan = ({
     });
   }
 
-  // Sort groups by priority (based on history) instead of shuffling
-  // Groups with members who haven't been assigned recently get priority
-  const referenceDate = formatDateInput(saturdays[0] || start);
-  const sortedGroups = [...groups].sort((a, b) => {
-    const priorityA = getGroupPriority(a, lastAssignmentMap, getPersonKey, referenceDate);
-    const priorityB = getGroupPriority(b, lastAssignmentMap, getPersonKey, referenceDate);
-    // Higher priority (more days since assignment) should come first
-    return priorityB - priorityA;
-  });
-
-  // For groups with equal priority (e.g., all never assigned), shuffle them
-  // This ensures some randomness while maintaining fairness
-  const groupsByPriority = new Map<number, typeof groups>();
-  sortedGroups.forEach(group => {
-    const priority = Math.floor(getGroupPriority(group, lastAssignmentMap, getPersonKey, referenceDate));
-    if (!groupsByPriority.has(priority)) {
-      groupsByPriority.set(priority, []);
-    }
-    groupsByPriority.get(priority)!.push(group);
-  });
-
-  const finalSortedGroups: typeof groups = [];
-  Array.from(groupsByPriority.entries())
-    .sort((a, b) => b[0] - a[0]) // Sort by priority descending
-    .forEach(([, groupsAtPriority]) => {
-      finalSortedGroups.push(...shuffle(groupsAtPriority));
+  const buildGroupOrder = (referenceDate: string) => {
+    const groupsByPriority = new Map<number, typeof groups>();
+    groups.forEach((group) => {
+      const priority = getGroupPriority(group, lastAssignmentMap, getPersonKey, referenceDate);
+      const priorityKey = Number.isFinite(priority) ? Math.floor(priority) : Number.MAX_SAFE_INTEGER;
+      if (!groupsByPriority.has(priorityKey)) {
+        groupsByPriority.set(priorityKey, []);
+      }
+      groupsByPriority.get(priorityKey)!.push(group);
     });
 
-  let cyclePool = [...finalSortedGroups];
-  const originalOrder = [...finalSortedGroups]; // Keep original order for cycle repetition
-  
-  const uniqueHouseholds = new Set(
-    selectedPersons.map((person) => getHouseholdKey(person)).filter(Boolean),
-  ).size;
-  const canFillWithoutDuplicates = uniqueHouseholds >= 10;
-  const assignments: Array<{ date: string; members: Person[] }> = [];
+    const ordered: typeof groups = [];
+    Array.from(groupsByPriority.entries())
+      .sort((a, b) => b[0] - a[0])
+      .forEach(([, groupsAtPriority]) => {
+        ordered.push(...shuffle(groupsAtPriority));
+      });
 
-  for (const saturday of saturdays) {
+    return ordered;
+  };
+
+  const fillSelection = (
+    orderedGroups: typeof groups,
+    relaxHousehold: boolean,
+  ) => {
     const selected: Person[] = [];
     const usedHouseholds = new Set<string>();
+    const usedGroupIds = new Set<PersonGroup['groupId']>();
 
-    const takeFromPool = (relaxHousehold: boolean) => {
-      let refillCount = 0;
-      const MAX_REFILLS = 3; // Prevent infinite loops
+    let madeProgress = true;
+    let passes = 0;
+    while (selected.length < 10 && madeProgress && passes < 2) {
+      madeProgress = false;
+      for (const group of orderedGroups) {
+        if (selected.length >= 10) break;
+        if (usedGroupIds.has(group.groupId)) continue;
 
-      while (selected.length < 10 && refillCount < MAX_REFILLS) {
-        if (cyclePool.length === 0) {
-          // Repeat original order instead of shuffling
-          cyclePool = [...originalOrder];
-          refillCount++;
-        }
+        const remainingSlots = 10 - selected.length;
+        if (group.members.length > remainingSlots) continue;
 
-        let attempts = cyclePool.length;
-        let madeProgress = false;
-
-        while (selected.length < 10 && attempts > 0) {
-          const group = cyclePool.shift();
-          if (!group) break;
-
-          let canAdd = true;
+        if (!relaxHousehold) {
+          let householdConflict = false;
           for (const person of group.members) {
             const householdKey = getHouseholdKey(person);
-            if (householdKey && !relaxHousehold && usedHouseholds.has(householdKey)) {
-              canAdd = false;
+            if (householdKey && usedHouseholds.has(householdKey)) {
+              householdConflict = true;
               break;
             }
           }
-
-          if (!canAdd) {
-            cyclePool.push(group);
-            attempts -= 1;
-            continue;
-          }
-
-          for (const person of group.members) {
-            if (selected.length >= 10) break;
-            const householdKey = getHouseholdKey(person);
-            if (householdKey) {
-              usedHouseholds.add(householdKey);
-            }
-            selected.push(person);
-            madeProgress = true;
-          }
-
-          attempts -= 1;
+          if (householdConflict) continue;
         }
 
-        // If we didn't make progress and haven't reached 10, we need to refill
-        if (!madeProgress && selected.length < 10) {
-          break; // Exit to allow relaxed household rules
-        }
+        group.members.forEach((person) => {
+          if (selected.length >= 10) return;
+          const householdKey = getHouseholdKey(person);
+          if (householdKey) {
+            usedHouseholds.add(householdKey);
+          }
+          selected.push(person);
+        });
+        usedGroupIds.add(group.groupId);
+        madeProgress = true;
       }
-    };
-
-    // First pass: try to fill with household rules
-    takeFromPool(false);
-    
-    // Second pass: if not full and we can't fill without duplicates, relax household rules
-    if (selected.length < 10 && !canFillWithoutDuplicates) {
-      takeFromPool(true);
+      passes += 1;
     }
 
-    // Third pass: if STILL not full (end of cycle), force fill by relaxing all rules
+    return selected;
+  };
+
+  const pickSelection = (referenceDate: string, relaxHousehold: boolean) => {
+    let bestSelection: Person[] = [];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const orderedGroups = buildGroupOrder(referenceDate);
+      const selection = fillSelection(orderedGroups, relaxHousehold);
+      if (selection.length > bestSelection.length) {
+        bestSelection = selection;
+      }
+      if (bestSelection.length === 10) break;
+    }
+    return bestSelection;
+  };
+
+  
+  const assignments: Array<{ date: string; members: Person[] }> = [];
+
+  for (const saturday of saturdays) {
+    const referenceDate = formatDateInput(saturday);
+    let selected = pickSelection(referenceDate, false);
+
     if (selected.length < 10) {
-      takeFromPool(true);
+      const relaxedSelection = pickSelection(referenceDate, true);
+      if (relaxedSelection.length > selected.length) {
+        selected = relaxedSelection;
+      }
     }
+
+    selected.forEach((person, index) => {
+      const personId = getPersonKey(person, index);
+      lastAssignmentMap.set(personId, referenceDate);
+    });
 
     assignments.push({
-      date: formatDateInput(saturday),
+      date: referenceDate,
       members: selected,
     });
   }
