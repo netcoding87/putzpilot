@@ -22,4 +22,8 @@ contextBridge.exposeInMainWorld('putzpilot', {
     get: () => ipcRenderer.invoke('plans:get'),
     set: (plans) => ipcRenderer.invoke('plans:set', plans),
   },
+  aliases: {
+    get: () => ipcRenderer.invoke('aliases:get'),
+    set: (aliases) => ipcRenderer.invoke('aliases:set', aliases),
+  },
 });

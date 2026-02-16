@@ -90,11 +90,16 @@ const store = new Store<{
     }>;
     savedAt: number;
   }>;
+  aliases?: Array<{
+    canonical: string;
+    aliases: string[];
+  }>;
 }>({
   defaults: {
     selection: [],
     groups: [],
     plans: [],
+    aliases: [],
   },
 });
 
@@ -360,6 +365,15 @@ ipcMain.handle('plans:get', () => {
 
 ipcMain.handle('plans:set', (_event, plans) => {
   store.set('plans', plans);
+  return { success: true };
+});
+
+ipcMain.handle('aliases:get', () => {
+  return store.get('aliases', []);
+});
+
+ipcMain.handle('aliases:set', (_event, aliases) => {
+  store.set('aliases', aliases);
   return { success: true };
 });
 

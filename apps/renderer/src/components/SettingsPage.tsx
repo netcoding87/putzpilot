@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 type SettingsDraft = {
   baseUrl: string;
   username: string;
@@ -13,6 +15,8 @@ type SettingsPageProps = {
   onTest: () => void;
   onSave: () => void;
   onBack: () => void;
+  aliases: Array<{ canonical: string; aliases: string[] }>;
+  onAliasesChange: (aliases: Array<{ canonical: string; aliases: string[] }>) => void;
 };
 
 export default function SettingsPage({
@@ -24,7 +28,85 @@ export default function SettingsPage({
   onTest,
   onSave,
   onBack,
+  aliases,
+  onAliasesChange,
 }: SettingsPageProps) {
+  const [newCanonical, setNewCanonical] = useState('');
+  const [newAliases, setNewAliases] = useState('');
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editCanonical, setEditCanonical] = useState('');
+  const [editAliases, setEditAliases] = useState('');
+  const [sortMode, setSortMode] = useState<'first' | 'last'>('first');
+
+  const getSortKey = (value: string) => {
+    const parts = value.trim().split(' ').filter(Boolean);
+    if (parts.length === 0) return '';
+    return sortMode === 'last' ? parts[parts.length - 1] : parts[0];
+  };
+
+  const sortedAliases = aliases
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) =>
+      getSortKey(a.entry.canonical).localeCompare(getSortKey(b.entry.canonical), 'de', {
+        sensitivity: 'base',
+      }),
+    );
+
+  const handleAddAlias = () => {
+    if (!newCanonical.trim()) return;
+    
+    const aliasArray = newAliases
+      .split(',')
+      .map((a) => a.trim())
+      .filter(Boolean);
+    
+    if (aliasArray.length === 0) return;
+
+    const updated = [
+      ...aliases,
+      { canonical: newCanonical.trim(), aliases: aliasArray },
+    ];
+    
+    onAliasesChange(updated);
+    setNewCanonical('');
+    setNewAliases('');
+  };
+
+  const handleDeleteAlias = (index: number) => {
+    const updated = aliases.filter((_, i) => i !== index);
+    onAliasesChange(updated);
+  };
+
+  const handleEditStart = (index: number) => {
+    const entry = aliases[index];
+    if (!entry) return;
+    setEditingIndex(index);
+    setEditCanonical(entry.canonical);
+    setEditAliases(entry.aliases.join(', '));
+  };
+
+  const handleEditCancel = () => {
+    setEditingIndex(null);
+    setEditCanonical('');
+    setEditAliases('');
+  };
+
+  const handleEditSave = () => {
+    if (editingIndex === null) return;
+    const canonicalValue = editCanonical.trim();
+    const aliasArray = editAliases
+      .split(',')
+      .map((a) => a.trim())
+      .filter(Boolean);
+    if (!canonicalValue || aliasArray.length === 0) return;
+
+    const updated = aliases.map((entry, index) =>
+      index === editingIndex ? { canonical: canonicalValue, aliases: aliasArray } : entry,
+    );
+    onAliasesChange(updated);
+    handleEditCancel();
+  };
+
   return (
     <div className="app">
       <header className="app__header">
@@ -95,6 +177,135 @@ export default function SettingsPage({
             </button>
           </div>
         </form>
+      </section>
+
+      <section className="card">
+        <h2>Namen-Aliase</h2>
+        <p className="help-text">
+          Verknüpfe alternative Schreibweisen aus der Historie mit aktuellen Personennamen.
+        </p>
+
+        <div className="alias-sort">
+          <span>Sortierung:</span>
+          <button
+            type="button"
+            className={`btn-toggle ${sortMode === 'first' ? 'active' : ''}`}
+            onClick={() => setSortMode('first')}
+          >
+            Vorname
+          </button>
+          <button
+            type="button"
+            className={`btn-toggle ${sortMode === 'last' ? 'active' : ''}`}
+            onClick={() => setSortMode('last')}
+          >
+            Nachname
+          </button>
+        </div>
+        
+        <div className="alias-list">
+          {aliases.length === 0 ? (
+            <p className="empty-message">Keine Aliase definiert</p>
+          ) : (
+            sortedAliases.map(({ entry, index }) => (
+              <div key={`${entry.canonical}-${index}`} className="alias-entry">
+                {editingIndex === index ? (
+                  <div className="alias-edit">
+                    <label>
+                      Kanonischer Name
+                      <input
+                        type="text"
+                        value={editCanonical}
+                        onChange={(e) => setEditCanonical(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Aliase (komma-getrennt)
+                      <input
+                        type="text"
+                        value={editAliases}
+                        onChange={(e) => setEditAliases(e.target.value)}
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <div className="alias-info">
+                    <strong>{entry.canonical}</strong>
+                    <span className="alias-items">→ {entry.aliases.join(', ')}</span>
+                  </div>
+                )}
+                <div className="alias-actions">
+                  {editingIndex === index ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleEditSave}
+                        className="btn-edit"
+                        disabled={!editCanonical.trim() || !editAliases.trim()}
+                        title="Speichern"
+                      >
+                        💾
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleEditCancel}
+                        className="btn-edit"
+                        title="Abbrechen"
+                      >
+                        ✖
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleEditStart(index)}
+                      className="btn-edit"
+                      title="Bearbeiten"
+                    >
+                      ✏️
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteAlias(index)}
+                    className="btn-delete"
+                    title="Löschen"
+                  >
+                    🗑
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="alias-form">
+          <label>
+            Kanonischer Name (aus ChurchTools)
+            <input
+              type="text"
+              value={newCanonical}
+              onChange={(e) => setNewCanonical(e.target.value)}
+              placeholder="z.B. Kevin-Angelo Galvez"
+            />
+          </label>
+          <label>
+            Aliase (komma-getrennt)
+            <input
+              type="text"
+              value={newAliases}
+              onChange={(e) => setNewAliases(e.target.value)}
+              placeholder="z.B. Kevin Galvez, K. Galvez"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={handleAddAlias}
+            disabled={!newCanonical.trim() || !newAliases.trim()}
+          >
+            Alias hinzufügen
+          </button>
+        </div>
       </section>
     </div>
   );

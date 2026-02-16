@@ -78,6 +78,11 @@ Dieses Dokument ist ein lebendes Arbeits‑ und Kontextdokument für KI‑gestü
    - Gruppen werden als atomar behandelt (keine Aufteilung in der Planung)
    - Suchfunktion zu History-Seite hinzugefügt (komplementär zu Chronik-Suche)
 - 2026‑02‑13: Alias-Mapping fuer manuelle Namensvarianten eingefuehrt (nameAliases.json).
+- 2026‑02‑14: Alias-Management in UI integriert (Settings-Seite):
+  - Aliase werden in electron-store persistiert
+  - JSON-Seed beim ersten Start
+  - Hinzufügen/Löschen von Aliasen ohne App-Neustart
+  - Automatische Anwendung auf Seed-Historie-Mapping
 
 ## Core Workflow: Personenladen & Gruppierung
 

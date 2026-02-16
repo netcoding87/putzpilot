@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import MainHeader from './components/MainHeader';
 import PersonsSection from './components/PersonsSection';
 import GroupEditor from './components/GroupEditor';
@@ -75,7 +75,21 @@ export default function App() {
     return lastDay;
   };
 
-  const formatDateInput = (date: Date) => date.toISOString().slice(0, 10);
+  const getFirstSaturdayAfter = (date: Date) => {
+    const next = new Date(date);
+    next.setDate(next.getDate() + 1);
+    while (next.getDay() !== 6) {
+      next.setDate(next.getDate() + 1);
+    }
+    return next;
+  };
+
+  const formatDateInput = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
 
   const getAge = (dateString?: string) => {
     if (!dateString) return null;
@@ -101,6 +115,8 @@ export default function App() {
   const [planHistory, setPlanHistory] = useState<PlanHistory>({ plans: [] });
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [planView, setPlanView] = useState<'planning' | 'history' | 'chronik'>('planning');
+  const [aliases, setAliases] = useState<Array<{ canonical: string; aliases: string[] }>>([]);
+  const hasUserAdjustedDatesRef = useRef(false);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('putzpilot-theme') as 'dark' | 'light' | null;
@@ -112,7 +128,71 @@ export default function App() {
     window.putzpilot.plans.get().then((savedPlans) => {
       setPlanHistory({ plans: savedPlans });
     }).catch(console.error);
+
+    // Load aliases (seed from JSON if empty)
+    window.putzpilot.aliases.get().then((storedAliases) => {
+      if (storedAliases && storedAliases.length > 0) {
+        setAliases(storedAliases);
+      } else {
+        // Seed from JSON on first run
+        const seedAliases = Array.isArray(nameAliases)
+          ? (nameAliases as Array<{ canonical: string; aliases: string[] }>)
+          : [];
+        setAliases(seedAliases);
+        if (seedAliases.length > 0) {
+          window.putzpilot.aliases.set(seedAliases).catch(console.error);
+        }
+      }
+    }).catch(console.error);
   }, []);
+
+  const lastHistoryDate = useMemo(() => {
+    const parseHistoryDate = (value: string) => {
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return null;
+      parsed.setHours(0, 0, 0, 0);
+      return parsed;
+    };
+
+    let latest: Date | null = null;
+    (planHistorySeed as HistoryYear[]).forEach((year) => {
+      year.assignments.forEach((assignment) => {
+        const parsed = parseHistoryDate(assignment.date);
+        if (!parsed) return;
+        if (!latest || parsed > latest) latest = parsed;
+      });
+    });
+
+    planHistory.plans.forEach((plan) => {
+      plan.assignments.forEach((assignment) => {
+        const parsed = parseHistoryDate(assignment.date);
+        if (!parsed) return;
+        if (!latest || parsed > latest) latest = parsed;
+      });
+    });
+
+    return latest;
+  }, [planHistory.plans]);
+
+  const initialDates = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let start = getDefaultStartDate();
+    if (lastHistoryDate && lastHistoryDate >= today) {
+      start = getFirstSaturdayAfter(lastHistoryDate);
+    }
+    const endTarget = addMonths(start, 3);
+    const end = getLastSaturdayOfMonth(endTarget.getFullYear(), endTarget.getMonth());
+
+    return { start, end };
+  }, [lastHistoryDate]);
+
+  useEffect(() => {
+    if (hasUserAdjustedDatesRef.current) return;
+    setStartDate(formatDateInput(initialDates.start));
+    setEndDate(formatDateInput(initialDates.end));
+  }, [initialDates]);
 
   const handleThemeChange = (newTheme: 'dark' | 'light') => {
     setTheme(newTheme);
@@ -366,11 +446,7 @@ export default function App() {
       }
     });
 
-    const aliasEntries = Array.isArray(nameAliases)
-      ? (nameAliases as Array<{ canonical: string; aliases: string[] }>)
-      : [];
-
-    aliasEntries.forEach((entry) => {
+    aliases.forEach((entry) => {
       const canonicalKey = normalizeName(entry.canonical ?? '');
       if (!canonicalKey) return;
       const canonicalId = uniqueMap.get(canonicalKey);
@@ -386,7 +462,7 @@ export default function App() {
     });
 
     return uniqueMap;
-  }, [persons]);
+  }, [persons, aliases]);
 
   const seedHistoryForPlanning = useMemo<PlanHistory>(() => {
     const getNameCandidates = (name: string) => {
@@ -860,6 +936,16 @@ export default function App() {
     setSettingsTestResult(null);
   };
 
+  const handleStartDateChange = (value: string) => {
+    hasUserAdjustedDatesRef.current = true;
+    setStartDate(value);
+  };
+
+  const handleEndDateChange = (value: string) => {
+    hasUserAdjustedDatesRef.current = true;
+    setEndDate(value);
+  };
+
   const handleTestConnection = async () => {
     setSettingsLoading(true);
     setSettingsTestResult(null);
@@ -903,6 +989,15 @@ export default function App() {
     }
   };
 
+  const handleAliasesChange = async (updatedAliases: Array<{ canonical: string; aliases: string[] }>) => {
+    setAliases(updatedAliases);
+    try {
+      await window.putzpilot.aliases.set(updatedAliases);
+    } catch (err) {
+      console.error('Failed to save aliases:', err);
+    }
+  };
+
   return (
     <>
       {currentPage === 'settings' ? (
@@ -915,6 +1010,8 @@ export default function App() {
           onTest={handleTestConnection}
           onSave={handleSaveSettings}
           onBack={() => setCurrentPage('main')}
+          aliases={aliases}
+          onAliasesChange={handleAliasesChange}
         />
       ) : (
         <div className="app">
@@ -926,8 +1023,8 @@ export default function App() {
           <PlanSection
             startDate={startDate}
             endDate={endDate}
-            onStartDateChange={setStartDate}
-            onEndDateChange={setEndDate}
+            onStartDateChange={handleStartDateChange}
+            onEndDateChange={handleEndDateChange}
             onGeneratePlan={generatePlan}
             selectedCount={selectedPersons.length}
             plan={plan}
