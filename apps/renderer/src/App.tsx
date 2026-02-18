@@ -25,12 +25,12 @@ import {
 export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [currentPage, setCurrentPage] = useState<'main' | 'settings'>('main');
-  const [baseUrl, setBaseUrl] = useState('https://cgpb.church.tools');
-  const [username, setUsername] = useState('nick.wittland@gmx.de');
+  const [baseUrl, setBaseUrl] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
   const [settingsDraft, setSettingsDraft] = useState({
-    baseUrl: 'https://cgpb.church.tools',
+    baseUrl: '',
     username: '',
     password: '',
   });
