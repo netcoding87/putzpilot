@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   DndContext,
   DragEndEvent,
@@ -120,6 +120,8 @@ export default function PlanSection({
   const [activeHistoryYear, setActiveHistoryYear] = useState<string | null>(null);
   const [historyQuery, setHistoryQuery] = useState('');
   const [chronikQuery, setChronikQuery] = useState('');
+  const [printStartDate, setPrintStartDate] = useState('');
+  const [printEndDate, setPrintEndDate] = useState('');
 
   useEffect(() => {
     if (historyYears.length === 0) return;
@@ -129,6 +131,224 @@ export default function PlanSection({
       setActiveHistoryYear(latestYear);
     }
   }, [activeHistoryYear, historyYears]);
+
+  const formatDateInput = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const addMonths = (value: string, months: number) => {
+    if (!value) return '';
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return '';
+    date.setMonth(date.getMonth() + months);
+    return formatDateInput(date);
+  };
+
+  const allHistoryAssignments = useMemo(
+    () =>
+      historyYears
+        .flatMap((year) => year.assignments)
+        .slice()
+        .sort((a, b) => a.date.localeCompare(b.date)),
+    [historyYears],
+  );
+
+  useEffect(() => {
+    if (!activeHistoryYear) return;
+    const selectedYear = historyYears.find((year) => year.year === activeHistoryYear);
+    const yearAssignments = selectedYear?.assignments ?? [];
+    if (yearAssignments.length === 0) return;
+
+    const startDate = yearAssignments[0].date;
+    const yearEndDate = yearAssignments[yearAssignments.length - 1].date;
+    const maxEnd = addMonths(startDate, 4);
+    const endDate = maxEnd && yearEndDate > maxEnd ? maxEnd : yearEndDate;
+
+    setPrintStartDate(startDate);
+    setPrintEndDate(endDate);
+  }, [activeHistoryYear, historyYears]);
+
+  const maxPrintEndDate = useMemo(() => {
+    if (allHistoryAssignments.length === 0) return '';
+    const lastAvailable = allHistoryAssignments[allHistoryAssignments.length - 1].date;
+    if (!printStartDate) return lastAvailable;
+    const limit = addMonths(printStartDate, 4);
+    if (!limit) return lastAvailable;
+    return limit < lastAvailable ? limit : lastAvailable;
+  }, [allHistoryAssignments, printStartDate]);
+
+  useEffect(() => {
+    if (!printEndDate || !maxPrintEndDate) return;
+    if (printEndDate > maxPrintEndDate) {
+      setPrintEndDate(maxPrintEndDate);
+    }
+  }, [maxPrintEndDate, printEndDate]);
+
+  const printAssignments = useMemo(
+    () =>
+      allHistoryAssignments.filter((assignment) => {
+        if (printStartDate && assignment.date < printStartDate) return false;
+        if (printEndDate && assignment.date > printEndDate) return false;
+        return true;
+      }),
+    [allHistoryAssignments, printEndDate, printStartDate],
+  );
+
+  const formatMonthYear = (value: string) => {
+    if (!value) return '';
+    const date = new Date(`${value}T00:00:00`);
+    return date.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+  };
+
+  const formatShortDate = (value: string) => {
+    if (!value) return '';
+    const date = new Date(`${value}T00:00:00`);
+    return date.toLocaleDateString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: '2-digit',
+    });
+  };
+
+  const openPrintPreview = () => {
+    if (printAssignments.length === 0) return;
+    const startYear = printStartDate ? printStartDate.slice(0, 4) : '';
+    const endYear = printEndDate ? printEndDate.slice(0, 4) : '';
+    const titleYear = startYear && endYear && startYear !== endYear
+      ? `${startYear}-${endYear}`
+      : startYear || endYear;
+    const title = titleYear ? `Putzplan ${titleYear}` : 'Putzplan';
+
+    const monthGroups: Array<{ key: string; label: string; entries: typeof printAssignments }> = [];
+    printAssignments.forEach((entry) => {
+      const date = new Date(`${entry.date}T00:00:00`);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const label = date.toLocaleDateString('de-DE', { month: 'long' });
+      const existing = monthGroups.find((group) => group.key === key);
+      if (existing) {
+        existing.entries.push(entry);
+      } else {
+        monthGroups.push({ key, label, entries: [entry] });
+      }
+    });
+
+    const rowsHtml = monthGroups
+      .map((group) => {
+        const rows = group.entries
+          .map((entry) => {
+            const dateLabel = formatShortDate(entry.date);
+            const firstRowCells = Array.from({ length: 5 })
+              .map((_, colIndex) => {
+                const member = entry.members[colIndex];
+                const text = member ? String(member) : '';
+                return `<td class="name-cell">${text}</td>`;
+              })
+              .join('');
+            const secondRowCells = Array.from({ length: 5 })
+              .map((_, colIndex) => {
+                const member = entry.members[colIndex + 5];
+                const text = member ? String(member) : '';
+                return `<td class="name-cell">${text}</td>`;
+              })
+              .join('');
+            return `
+              <tbody class="week-group">
+                <tr>
+                  <td class="date-cell" rowspan="2">${dateLabel}</td>
+                  ${firstRowCells}
+                </tr>
+                <tr>
+                  ${secondRowCells}
+                </tr>
+              </tbody>
+            `;
+          })
+          .join('');
+        return `
+          <table class="month-table">
+            <colgroup>
+              <col class="date-col" />
+              <col class="name-col" />
+              <col class="name-col" />
+              <col class="name-col" />
+              <col class="name-col" />
+              <col class="name-col" />
+            </colgroup>
+            <thead>
+              <tr class="month-header"><th colspan="6">${group.label}</th></tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        `;
+      })
+      .join('');
+
+    const html = `
+      <!DOCTYPE html>
+      <html lang="de">
+        <head>
+          <meta charset="UTF-8" />
+          <title>${title}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 24px;
+              color: #000;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            h1 { margin: 0 0 16px; font-size: 20px; text-align: center; }
+            .toolbar { margin: 0 0 16px; }
+            .toolbar button { padding: 8px 12px; font-size: 14px; }
+            .month-table { width: 100%; border-collapse: collapse; margin: 0 0 12px; table-layout: fixed; }
+            .month-header th {
+              background: #f5df90;
+              text-align: left;
+              padding: 6px 8px;
+              border: 1px solid #000;
+              font-size: 14px;
+            }
+            td { border: 1px solid #000; padding: 4px 6px; font-size: 12px; }
+            .week-group { break-inside: avoid; page-break-inside: avoid; }
+            .week-group tr { break-inside: avoid; page-break-inside: avoid; }
+            .date-col { width: 80px; }
+            .name-col { width: calc((100% - 80px) / 5); }
+            .date-cell {
+              width: 80px;
+              min-width: 80px;
+              max-width: 80px;
+              text-align: center;
+              font-weight: 600;
+              white-space: nowrap;
+            }
+            .name-cell { width: calc((100% - 80px) / 5); }
+            @media print {
+              .toolbar { display: none; }
+              body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="toolbar">
+            <button onclick="window.print()">Als PDF speichern</button>
+          </div>
+          <h1>${title}</h1>
+          ${rowsHtml}
+        </body>
+      </html>
+    `;
+
+    const preview = window.open('', '_blank', 'width=900,height=800');
+    if (!preview) return;
+    preview.document.write(html);
+    preview.document.close();
+  };
 
   const handleDragStart = (event: DragStartEvent) => {
     const { data } = event.active;
@@ -359,6 +579,75 @@ export default function PlanSection({
           ) : (
             <p>Keine Treffer gefunden.</p>
           )}
+        </div>
+
+        <div className="print-controls">
+          <label>
+            Von
+            <input
+              type="date"
+              value={printStartDate}
+              min={allHistoryAssignments[0]?.date}
+              max={maxPrintEndDate || undefined}
+              onChange={(event) => setPrintStartDate(event.target.value)}
+            />
+          </label>
+          <label>
+            Bis
+            <input
+              type="date"
+              value={printEndDate}
+              min={printStartDate || undefined}
+              max={maxPrintEndDate || undefined}
+              onChange={(event) => setPrintEndDate(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={openPrintPreview}
+            disabled={printAssignments.length === 0}
+          >
+            Export to PDF
+          </button>
+        </div>
+
+        <div className="print-area">
+          <div className="print-header">
+            <h1>
+              Putzplan ({formatMonthYear(printStartDate)} - {formatMonthYear(printEndDate)})
+            </h1>
+          </div>
+          <div className="print-list">
+            {printAssignments.map((entry) => (
+              <div key={`print-${entry.date}`} className="print-entry">
+                <h3>
+                  {new Date(`${entry.date}T00:00:00`).toLocaleDateString('de-DE', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </h3>
+                <table className="plan-table">
+                  <tbody>
+                    {[entry.members.slice(0, 5), entry.members.slice(5, 10)].map((row, rowIndex) => (
+                      <tr key={`print-${entry.date}-row-${rowIndex}`}>
+                        {Array.from({ length: 5 }).map((_, colIndex) => {
+                          const member = row[colIndex];
+                          return (
+                            <td key={`print-${entry.date}-${rowIndex}-${colIndex}`}>
+                              {member ?? ''}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
         </div>
       </>
     );

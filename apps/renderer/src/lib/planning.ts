@@ -2,7 +2,12 @@ import type { Person } from '../types/people';
 import type { ManualGroup } from '../types/groups';
 import type { BuildPlanParams, BuildPlanResult, PlanHistory } from '../types/planning';
 
-const formatDateInput = (date: Date) => date.toISOString().slice(0, 10);
+const formatDateInput = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const parseDateInput = (value: string) => {
   const parsed = new Date(value);
@@ -106,6 +111,44 @@ export const buildPlan = ({
     return { assignments: [], error: 'Keine ausgewählten Mitglieder verfügbar.' };
   }
 
+  const isWithinRange = (date: Date) => date >= start && date <= end;
+
+  const getEasterSunday = (year: number) => {
+    const a = year % 19;
+    const b = Math.floor(year / 100);
+    const c = year % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * m + 114) / 31);
+    const day = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(year, month - 1, day);
+  };
+
+  const getSpecialDates = (rangeStart: Date, rangeEnd: Date) => {
+    const dates: Date[] = [];
+    for (let year = rangeStart.getFullYear(); year <= rangeEnd.getFullYear(); year += 1) {
+      const easterSunday = getEasterSunday(year);
+      const maundyThursday = new Date(easterSunday);
+      maundyThursday.setDate(maundyThursday.getDate() - 3);
+      if (isWithinRange(maundyThursday)) {
+        dates.push(maundyThursday);
+      }
+
+      const dec23 = new Date(year, 11, 23);
+      if (dec23.getDay() !== 6 && isWithinRange(dec23)) {
+        dates.push(dec23);
+      }
+    }
+    return dates;
+  };
+
   const saturdays: Date[] = [];
   const cursor = new Date(start);
   while (cursor <= end) {
@@ -114,6 +157,13 @@ export const buildPlan = ({
     }
     cursor.setDate(cursor.getDate() + 1);
   }
+
+  const specialDates = getSpecialDates(start, end);
+  const assignmentDates = Array.from(
+    new Map(
+      [...saturdays, ...specialDates].map((date) => [formatDateInput(date), date]),
+    ).values(),
+  ).sort((a, b) => a.getTime() - b.getTime());
 
   // Extract last assignment info from history
   const lastAssignmentMap = getLastAssignmentMap(history, getPersonKey);
@@ -303,8 +353,8 @@ export const buildPlan = ({
   
   const assignments: Array<{ date: string; members: Person[] }> = [];
 
-  for (const saturday of saturdays) {
-    const referenceDate = formatDateInput(saturday);
+  for (const assignmentDate of assignmentDates) {
+    const referenceDate = formatDateInput(assignmentDate);
     let selected = pickSelection(referenceDate, false);
 
     if (selected.length < 10) {

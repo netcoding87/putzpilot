@@ -1302,3 +1302,71 @@ input[type='checkbox'] {
 .alias-form button {
   align-self: flex-start;
 }
+
+.print-controls {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  margin: 16px 0 24px;
+  flex-wrap: wrap;
+}
+
+.print-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.print-area {
+  display: none;
+}
+
+.print-header {
+  margin: 0 0 16px;
+}
+
+.print-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.print-entry {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+@media print {
+  body {
+    background: #ffffff;
+    color: #000000;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+
+  .print-area {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 24px;
+  }
+
+  .print-area h1,
+  .print-area h3 {
+    color: #000000;
+  }
+
+  .print-area .plan-table td {
+    border: 1px solid #000000;
+    color: #000000;
+  }
+}

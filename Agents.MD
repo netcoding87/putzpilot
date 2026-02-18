@@ -83,6 +83,10 @@ Dieses Dokument ist ein lebendes Arbeits‑ und Kontextdokument für KI‑gestü
   - JSON-Seed beim ersten Start
   - Hinzufügen/Löschen von Aliasen ohne App-Neustart
   - Automatische Anwendung auf Seed-Historie-Mapping
+- 2026‑02‑18: Sondertermine in der Planung:
+   - Gruendonnerstag (Donnerstag vor Karfreitag)
+   - 23.12. (falls kein Samstag)
+   - Nur innerhalb des gewaehlten Start/Ende-Zeitraums
 
 ## Core Workflow: Personenladen & Gruppierung
 
