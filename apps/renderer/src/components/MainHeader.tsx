@@ -1,3 +1,5 @@
+import iconSvg from '/icon.svg?url';
+
 type MainHeaderProps = {
   onOpenSettings: () => void;
   theme: 'dark' | 'light';
@@ -9,7 +11,7 @@ export default function MainHeader({ onOpenSettings, theme, onThemeChange }: Mai
     <header className="app__header">
       <div className="header-main">
         <div className="header-top">
-          <img src="/icon.svg" alt="PutzPilot" className="header-icon" />
+          <img src={iconSvg} alt="PutzPilot" className="header-icon" />
           <h1>Putz Pilot</h1>
         </div>
         <p className="header-subtitle">Wochenplanung für den Putzdienst.</p>
