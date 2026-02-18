@@ -1,7 +1,7 @@
 {
   "name": "@putzpilot/main",
   "private": true,
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "PutzPilot Desktop App",
   "author": "PutzPilot",
   "type": "module",
@@ -26,7 +26,6 @@
   "build": {
     "appId": "com.putzpilot.app",
     "productName": "PutzPilot",
-    "icon": "../../assets/icon.png",
     "directories": {
       "output": "dist-electron"
     },
@@ -47,12 +46,14 @@
       "target": [
         "dmg"
       ],
-      "identity": null
+      "identity": null,
+      "icon": "../../assets/icon.icns"
     },
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "icon": "../../assets/icon.png"
     }
   }
 }
