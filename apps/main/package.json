@@ -1,7 +1,7 @@
 {
   "name": "@putzpilot/main",
   "private": true,
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "PutzPilot Desktop App",
   "author": "PutzPilot",
   "type": "module",
