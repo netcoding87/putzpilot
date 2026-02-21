@@ -10,12 +10,18 @@ permissions:
 
 jobs:
   build:
-    name: Build (${{ matrix.os }})
+    name: Build (${{ matrix.os }} - ${{ matrix.arch }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        include:
+          - os: macos-latest
+            arch: arm64
+          - os: macos-13
+            arch: x86_64
+          - os: windows-latest
+            arch: x86_64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,7 +46,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: putzpilot-${{ matrix.os }}
+          name: putzpilot-${{ matrix.os }}-${{ matrix.arch }}
           path: |
             apps/main/dist-electron/**/*.dmg
             apps/main/dist-electron/**/*.exe
