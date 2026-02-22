@@ -1016,6 +1016,32 @@ input[type='checkbox'] {
   animation: slideUp 0.3s ease-out;
 }
 
+/* Padding for confirmation dialog content */
+.modal-content > h3 {
+  margin: 0;
+  padding: 32px 32px 24px 32px;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+}
+
+.modal-content > p {
+  margin: 0;
+  padding: 0 32px 16px 32px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.modal-content > p:last-of-type {
+  padding-bottom: 24px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 16px;
+  padding: 0 32px 32px 32px;
+  justify-content: flex-end;
+}
+
 @keyframes slideUp {
   from {
     transform: translateY(20px);
