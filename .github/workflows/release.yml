@@ -10,18 +10,12 @@ permissions:
 
 jobs:
   build:
-    name: Build (${{ matrix.os }} - ${{ matrix.arch }})
+    name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-latest
-            arch: arm64
-          - os: macos-12
-            arch: x86_64
-          - os: windows-latest
-            arch: x86_64
+        os: [macos-latest, windows-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,13 +34,30 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build and package
-        run: pnpm -w dist
+      - name: Build renderer
+        run: pnpm -C apps/renderer build
+
+      - name: Build main process
+        run: pnpm -C apps/main build
+
+      - name: Build macOS arm64
+        if: matrix.os == 'macos-latest'
+        run: pnpm -C apps/main exec electron-builder --mac --arm64
+
+      - name: Build macOS x64 (Intel)
+        if: matrix.os == 'macos-latest'
+        run: |
+          sudo softwareupdate --install-rosetta --agree-to-license
+          pnpm -C apps/main exec electron-builder --mac --x64
+
+      - name: Build Windows
+        if: matrix.os == 'windows-latest'
+        run: pnpm -C apps/main exec electron-builder --win
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: putzpilot-${{ matrix.os }}-${{ matrix.arch }}
+          name: putzpilot-${{ matrix.os }}
           path: |
             apps/main/dist-electron/**/*.dmg
             apps/main/dist-electron/**/*.exe
