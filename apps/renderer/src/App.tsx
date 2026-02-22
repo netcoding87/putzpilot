@@ -836,6 +836,22 @@ export default function App() {
     setViewMode('persons');
   };
 
+  const handleResetGroups = async () => {
+    // Clear stored manual groups
+    await window.putzpilot.groups.set([]);
+    setManualGroups([]);
+    
+    // Regenerate groups from household data only
+    const householdGroups = convertPersonsToGroups(selectedPersons, getHouseholdKey, getPersonKey);
+    
+    // Update both draft and manual groups
+    setGroupsDraft(householdGroups);
+    setManualGroups(householdGroups);
+    
+    // Auto-save to storage
+    await window.putzpilot.groups.set(householdGroups);
+  };
+
   const handleSwapPersons = (
     weekDate1: string,
     personIndex1: number,
@@ -1049,6 +1065,7 @@ export default function App() {
               onCreateGroupFromGroup={handleGroupCreateFromGroup}
               onCancel={handleGroupCancel}
               onReload={handleReloadPersons}
+              onReset={handleResetGroups}
               isLoading={loading}
             />
           ) : (

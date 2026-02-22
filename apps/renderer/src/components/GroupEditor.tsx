@@ -24,6 +24,7 @@ type GroupEditorProps = {
   onCreateGroupFromGroup: (personId: string, afterGroupId: string) => void;
   onCancel: () => void;
   onReload?: () => void;
+  onReset?: () => void;
   isLoading?: boolean;
 };
 
@@ -141,6 +142,7 @@ export default function GroupEditor({
   onCreateGroupFromGroup,
   onCancel,
   onReload,
+  onReset,
   isLoading = false,
 }: GroupEditorProps) {
   const sensors = useSensors(
@@ -155,6 +157,7 @@ export default function GroupEditor({
   const [activeType, setActiveType] = useState<'person' | 'group' | null>(null);
   const [sourceGroupId, setSourceGroupId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const personMap = useMemo(() => {
     const map = new Map<string, Person>();
@@ -172,6 +175,21 @@ export default function GroupEditor({
     const fullName = `${person.firstName ?? ''} ${person.lastName ?? ''}`.toLowerCase();
     const email = (person.email ?? '').toLowerCase();
     return fullName.includes(normalizedQuery) || email.includes(normalizedQuery);
+  };
+
+  const handleResetClick = () => {
+    setShowResetConfirm(true);
+  };
+
+  const handleResetConfirm = () => {
+    if (onReset) {
+      onReset();
+    }
+    setShowResetConfirm(false);
+  };
+
+  const handleResetCancel = () => {
+    setShowResetConfirm(false);
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -258,6 +276,16 @@ export default function GroupEditor({
             >
               Personenauswahl
             </button>
+            {onReset && (
+              <button
+                type="button"
+                onClick={handleResetClick}
+                className="btn-secondary"
+                title="Alle manuellen Änderungen verwerfen und neu nach Haushalten gruppieren"
+              >
+                Gruppierung zurücksetzen
+              </button>
+            )}
             {onReload && (
               <button
                 type="button"
@@ -297,6 +325,27 @@ export default function GroupEditor({
           <EmptyGroupCard />
         </div>
       </section>
+
+      {showResetConfirm && (
+        <div className="modal-backdrop" onClick={handleResetCancel}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>Gruppierung zurücksetzen?</h3>
+            <p>
+              Alle manuellen Änderungen an den Gruppen werden verworfen und die Gruppen werden
+              automatisch nach Haushalten neu erstellt.
+            </p>
+            <p>Diese Aktion kann nicht rückgängig gemacht werden.</p>
+            <div className="modal-actions">
+              <button type="button" onClick={handleResetCancel} className="btn-secondary">
+                Abbrechen
+              </button>
+              <button type="button" onClick={handleResetConfirm} className="btn-primary">
+                Zurücksetzen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <DragOverlay>
         {activeType === 'person' && activePersonObject && (
